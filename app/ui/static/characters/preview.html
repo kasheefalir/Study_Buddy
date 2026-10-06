@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Study Buddy · Choose a student</title>
+  <style>
+    * {box-sizing:border-box}
+    body {margin:0;background:#e8eeea;color:#293e38;font:14px ui-monospace,monospace}
+    main {max-width:850px;margin:auto;padding:28px 20px 40px}
+    header {display:flex;align-items:center;justify-content:space-between;gap:16px;border-bottom:1px solid #bdcbc2;padding-bottom:18px}
+    h1 {font:32px Georgia,serif;margin:4px 0} p {color:#607568;line-height:1.6}
+    small {font-size:10px} a {color:#355f50}
+    .stage {display:flex;justify-content:center;margin:24px 0 14px}
+    canvas {image-rendering:pixelated;display:block}
+    #hero {width:min(512px,100%);aspect-ratio:128/80;background:#d6e2d5}
+    fieldset {border:0;padding:0;margin:12px 0;display:flex;justify-content:center;flex-wrap:wrap;gap:6px}
+    legend {text-align:center;font-size:11px;color:#607568;margin-bottom:8px}
+    button, .option {position:relative;display:inline-block;background:#f8faf5;border:1px solid #9fb4a6;border-radius:4px;padding:10px 14px;color:#29483c;font:inherit;cursor:pointer}
+    button:hover,.option:hover {background:#dbe9de}
+    .option:has(:checked) {background:#3a6553;color:#fffbea}
+    .option input {position:absolute;opacity:0;width:1px;height:1px}
+    .option:focus-within,button:focus-visible,a:focus-visible {outline:3px solid #bd7858;outline-offset:3px}
+    .playback {display:flex;align-items:center;justify-content:center;gap:14px;margin-top:16px}
+    #frame {font-size:11px;min-width:90px}
+    .directions {display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:32px 0;text-align:center;border-top:1px solid #bdcbc2;padding-top:20px}
+    .directions canvas {width:100%;aspect-ratio:1;background:#dce6da;margin-bottom:8px}
+    .directions span {font-size:11px}
+    h2 {font:23px Georgia,serif;margin-top:30px}
+    #sheet {width:100%;image-rendering:pixelated;background:repeating-conic-gradient(#d7dfd5 0% 25%,#edf0e7 0% 50%) 0/24px 24px;border:1px solid #b7c7b9}
+    .downloads {display:flex;gap:20px;flex-wrap:wrap;margin-top:18px}
+    #error {color:#a53e38}
+    .student-select {display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:20px}
+    select {font:inherit;padding:10px;background:#f8faf5;color:#29483c;border:1px solid #9fb4a6;border-radius:4px}
+    @media(max-width:500px) {.directions {grid-template-columns:repeat(2,1fr)}header {align-items:flex-start}h1 {font-size:28px}}
+  </style>
+</head>
+<body><main>
+  <header><div><small>STUDY BUDDY / CLASSMATES</small><h1 id="student-name">Meet Rowan.</h1></div><a href="/">Back to homeroom</a></header>
+  <div class="student-select"><label for="student-select">Student</label><select id="student-select"></select><button id="use-student">Use in classroom</button></div>
+  <p id="selection-status" role="status"></p>
+  <p>One more lecture, then the library.</p>
+  <div class="stage"><canvas id="hero" width="128" height="80" aria-label="Animated college student"></canvas></div>
+  <fieldset><legend>Facing</legend>
+    <label class="option"><input name="direction" type="radio" value="up">↑ Up</label>
+    <label class="option"><input name="direction" type="radio" value="left">← Left</label>
+    <label class="option"><input name="direction" type="radio" value="down" checked>↓ Down</label>
+    <label class="option"><input name="direction" type="radio" value="right">→ Right</label>
+  </fieldset>
+  <fieldset><legend>Animation</legend><label class="option"><input name="mode" type="radio" value="idle">Idle</label><label class="option"><input name="mode" type="radio" value="walk" checked>Walk</label></fieldset>
+  <div class="playback"><button id="pause" aria-label="Pause animation">Ⅱ</button><span id="frame"></span></div>
+  <p id="error" role="alert"></p>
+  <div class="directions">
+    <div><canvas width="48" height="48" data-direction="down" aria-label="Down animation"></canvas><span>DOWN</span></div>
+    <div><canvas width="48" height="48" data-direction="left" aria-label="Left animation"></canvas><span>LEFT</span></div>
+    <div><canvas width="48" height="48" data-direction="right" aria-label="Right animation"></canvas><span>RIGHT</span></div>
+    <div><canvas width="48" height="48" data-direction="up" aria-label="Up animation"></canvas><span>UP</span></div>
+  </div>
+  <h2>The sprite sheet</h2>
+  <p>32 × 32 frames · 256 × 128 sheet · transparent PNG<br>Rows: down, left, right, up. Columns: four idle frames, then four walking frames.</p>
+  <img id="sheet" src="college-student.png" alt="All 32 student animation frames">
+  <div class="downloads"><a id="png-download" href="college-student.png" download>Download PNG</a><a id="json-download" href="college-student.json" download>Animation data</a><a id="gif-download" href="college-student-walk.gif" download>Walking GIF</a></div>
+</main>
+<script src="catalog.js"></script><script src="student-sprite.js"></script><script>
+  let chosen = StudentCharacters.find(character => character.id === localStorage.getItem("study-buddy-student")) || StudentCharacters[0];
+  let actor = new StudentSprite(chosen.file + ".png");
+  let selectionVersion = 0;
+  const selector = document.querySelector("#student-select");
+  for (const character of StudentCharacters) {
+    const option = document.createElement("option"); option.value = character.id; option.textContent = character.name; selector.append(option);
+  }
+  function updateStudent() {
+    selector.value = chosen.id;
+    document.querySelector("#student-name").textContent = "Meet " + chosen.name + ".";
+    document.querySelector("#sheet").src = chosen.file + ".png";
+    document.querySelector("#png-download").href = chosen.file + ".png";
+    document.querySelector("#json-download").href = chosen.file + ".json";
+    document.querySelector("#gif-download").href = chosen.file + "-walk.gif";
+    document.querySelector("#selection-status").textContent = localStorage.getItem("study-buddy-student") === chosen.id ? "Your current classroom student." : "";
+  }
+  updateStudent();
+  selector.onchange = async () => {
+    const version = ++selectionVersion;
+    const character = StudentCharacters.find(item => item.id === selector.value);
+    const candidate = new StudentSprite(character.file + ".png");
+    document.querySelector("#use-student").disabled = true;
+    try {
+      await candidate.ready;
+      if (version !== selectionVersion) return;
+      actor = candidate; chosen = character; updateStudent();
+      document.querySelector("#error").textContent = "";
+    } catch (error) { if (version === selectionVersion) {selector.value = chosen.id; document.querySelector("#error").textContent = error.message;} }
+    finally { if (version === selectionVersion) document.querySelector("#use-student").disabled = false; }
+  };
+  document.querySelector("#use-student").onclick = () => {
+    localStorage.setItem("study-buddy-student", chosen.id); updateStudent();
+  };
+  const hero = document.querySelector("#hero"), context = hero.getContext("2d");
+  let running = !matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let time = 0, last = null;
+  const pause = document.querySelector("#pause");
+  function updatePause() {
+    pause.textContent = running ? "Ⅱ" : "▶";
+    pause.setAttribute("aria-label", running ? "Pause animation" : "Play animation");
+    pause.title = pause.getAttribute("aria-label");
+  }
+  pause.onclick = () => {running = !running; updatePause()};
+  updatePause();
+  function animate(now) {
+    if (running && last !== null && !document.hidden) time += Math.min(now - last, 100);
+    last = now;
+    const direction = document.querySelector('[name="direction"]:checked').value;
+    const mode = document.querySelector('[name="mode"]:checked').value;
+    context.clearRect(0,0,128,80);
+    context.fillStyle="#c0d1bd";context.fillRect(0,61,128,1);
+    context.fillStyle="#cbd9c5";
+    for(let x=0;x<128;x+=16) context.fillRect(x,62,1,18);
+    const column = actor.draw(context,48,31,{direction,mode,time});
+    document.querySelector("#frame").textContent = "Frame " + ((column % 4) + 1) + " / 4";
+    for(const canvas of document.querySelectorAll("[data-direction]")) {
+      const ctx=canvas.getContext("2d");ctx.clearRect(0,0,48,48);
+      actor.draw(ctx,8,9,{direction:canvas.dataset.direction,mode,time});
+    }
+    requestAnimationFrame(animate);
+  }
+  actor.ready.then(() => requestAnimationFrame(animate)).catch(error => {document.querySelector("#error").textContent=error.message});
+</script></body></html>

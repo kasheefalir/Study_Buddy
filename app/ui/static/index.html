@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Study Buddy · Homeroom</title><link rel="stylesheet" href="/static/styles.css?v=room-markers-25">
+</head>
+<body>
+  <header><a class="brand" href="/">Study Buddy<span>AFTER SCHOOL CLUB</span></a><div class="header-actions"><span id="status" role="status">Checking Professor…</span><button class="icon" data-open="room-menu" aria-label="Open classroom menu" title="Classroom menu">☰</button></div></header>
+  <main>
+    <div class="room-heading"><span id="room-number">ROOM</span><h1>A little room for big ideas.</h1><p>Your seat is waiting.</p></div>
+    <section class="room" aria-label="Interactive classroom">
+      <canvas id="classroom-canvas" width="320" height="288" tabindex="0" aria-label="Classroom. Use arrow keys to move and Space to interact with a nearby person or object."></canvas>
+      <button class="hotspot tutor" data-open="chat" aria-label="Talk to Professor, your AI tutor"><span class="interaction-marker" aria-hidden="true">!</span><span class="interaction-label">Talk to Professor <b>↗</b></span></button>
+      <button class="hotspot shelf" data-open="materials" aria-label="Open course materials bookshelf"><span class="interaction-marker materials-marker" aria-hidden="true">▤</span><span class="interaction-label">Open materials <b>↗</b></span></button>
+      <button class="hotspot desk" data-open="chat" aria-label="Open chat at your study desk"><span class="interaction-label">Study here <b>↗</b></span></button>
+      <button class="hotspot board" data-open="context" aria-label="View current conversation context"><span class="interaction-label">Conversation context <b>↗</b></span></button>
+      <span class="student-label">YOU</span>
+    </section>
+    <div class="nearby"><button id="nearby-action" hidden></button></div>
+    <footer><span class="online-dot"></span> Your own quiet corner. Saved on this device.</footer>
+  </main>
+  <dialog id="room-menu" aria-labelledby="menu-heading">
+    <div class="dialog-heading"><h2 id="menu-heading">Classroom</h2><button class="icon close" aria-label="Close classroom menu">×</button></div>
+    <nav class="menu-items" aria-label="Classroom options">
+      <button data-open="materials">Add study material <span>↗</span></button>
+      <button data-open="sessions">Study sessions <span>↗</span></button>
+      <button data-open="bookmarks">Saved concepts <span>↗</span></button>
+      <button data-open="characters">Choose student <span>↗</span></button>
+    </nav>
+    <div class="model-info"><small>THE MODEL BEHIND PROFESSOR</small><p id="professor-model">Checking…</p><span id="model-state">Connecting to local Ollama</span></div>
+  </dialog>
+  <dialog id="sessions" aria-labelledby="sessions-heading">
+    <div class="dialog-heading"><div><small>QUESTIONS, CONVERSATIONS & MEMORY</small><h2 id="sessions-heading">Study sessions</h2></div><button class="icon close" aria-label="Close study sessions">×</button></div>
+    <p id="sessions-status" class="note" role="status"></p>
+    <form id="create-session-form"><input id="new-session-title" aria-label="New session name" maxlength="100" placeholder="Custom name (optional)"><button type="submit">New session</button></form>
+    <ul id="session-list"></ul>
+    <section id="session-detail" hidden>
+      <h3 id="session-title"></h3><div id="session-messages"></div>
+      <form id="session-memory-form"><label for="session-memory">Study notes for Professor</label><textarea id="session-memory" rows="3" maxlength="4000" placeholder="Topics, goals, or details to remember for this session…"></textarea><button type="submit">Save notes</button></form>
+      <button id="resume-session" class="primary">Resume session</button>
+      <button id="delete-session" type="button">Delete session</button>
+    </section>
+  </dialog>
+  <dialog id="characters" aria-labelledby="characters-heading">
+    <div class="dialog-heading"><div><small>YOUR PLACE IN THE CLASSROOM</small><h2 id="characters-heading">Choose your student</h2></div><button class="icon close" aria-label="Close student picker">×</button></div>
+    <form id="student-name-form"><label for="student-name-input">Your name</label><input id="student-name-input" type="text" maxlength="24" autocomplete="given-name" placeholder="Your name"><button type="submit">Save</button></form>
+    <div id="character-options" class="character-options" role="group" aria-label="Students"></div>
+    <p id="character-status" class="note" role="status"></p>
+    <a href="/static/characters/preview.html">Preview animations</a>
+  </dialog>
+  <dialog id="classmate" aria-labelledby="classmate-name">
+    <div class="dialog-heading"><div><small>STUDY BREAK</small><h2 id="classmate-name"></h2></div><button class="icon close" aria-label="Close classmate conversation">×</button></div>
+    <p id="classmate-fact"></p><p id="classmate-source" class="note"></p>
+  </dialog>
+  <dialog id="bookmarks" aria-labelledby="bookmarks-title">
+    <div class="dialog-heading"><h2 id="bookmarks-title">Saved concepts</h2><button class="icon close" aria-label="Close saved concepts">×</button></div>
+    <p class="note">Saved in this browser. Bookmarks are not added to Professor's context.</p>
+    <div id="bookmark-list"></div><p id="bookmark-status" role="status" class="note"></p>
+    <button data-open="chat">Back to conversation</button>
+  </dialog>
+  <dialog id="chat" aria-label="Study with Professor">
+    <div class="dialog-heading"><div><small>YOUR AI TUTOR</small><h2>Study with Professor</h2></div><button class="icon close" aria-label="Close chat">×</button></div>
+    <small id="active-session-title">Study session</small>
+    <div class="grounding"><span id="grounding-status">No materials in this session</span><div class="compact-tools"><button id="search-toggle" class="toolbar-icon" type="button" aria-expanded="false" aria-controls="transcript-search" title="Search conversation" aria-label="Search conversation">⌕</button><button data-open="bookmarks" class="toolbar-icon" title="Saved concepts" aria-label="Saved concepts">☆</button><button id="latest-message" class="toolbar-icon" title="Latest message" aria-label="Latest message">⇓</button><details class="session-actions"><summary aria-label="Study session options" title="Study session options">⋯</summary><div class="session-action-list"><button data-open="materials">Materials</button><button data-open="sessions">Switch session</button><button id="clear-material" hidden>Clear batch</button></div></details></div></div>
+    <div id="transcript-search" class="transcript-tools" hidden><input id="chat-search" type="search" aria-label="Search this conversation" placeholder="Find in conversation"><span id="search-count" role="status"></span><button id="search-prev" title="Previous match" aria-label="Previous match">↑</button><button id="search-next" title="Next match" aria-label="Next match">↓</button></div>
+    <div id="messages" aria-live="polite"><article class="assistant">Professor here! What shall we investigate today?</article></div>
+    <div class="follow-ups"><button data-task="simplify" data-prompt="Explain that more simply.">Explain simply</button><button data-task="quiz" data-prompt="Quiz me on the main ideas in this session's material, one question at a time.">Quiz me</button><button id="next-question" data-task="quiz" data-prompt="Next question" hidden>Next question</button><button id="ask-question" type="button" hidden>Ask about this question</button><details class="more-actions"><summary aria-label="More study actions" title="More study actions">⋯</summary><div class="follow-up-menu"><button data-task="quiz" data-prompt="Review my missed answers.">Review missed answers</button><button data-task="summary_conversation" data-prompt="Recap our conversation.">Recap chat</button><button data-task="summary_material" data-prompt="Summarize the selected study material.">Summarize material</button></div></details></div>
+    <details id="study-controls"><summary>Activity &amp; token details</summary><div class="study-control-panel"><label class="task-picker" for="task-mode">Activity <select id="task-mode"><option value="auto">Automatic</option><option value="chat">Conversation</option><option value="quiz">Quiz</option><option value="simplify">Explain simply</option><option value="summary_conversation">Recap conversation</option><option value="summary_material">Summarize material</option></select></label><details id="token-details"><summary id="token-summary">Token usage: no recorded replies</summary><div id="token-breakdown"></div></details></div></details>
+    <p id="chat-error" class="error" role="alert"></p>
+    <form id="chat-form"><label class="sr-only" for="message">Message Professor</label><textarea id="message" rows="2" maxlength="12000" placeholder="Ask a question…" required></textarea><button class="primary" type="submit" aria-label="Send message">↑</button></form>
+    <div class="chat-actions"><button id="new-chat">New conversation</button><button data-open="voice">Voice options</button></div>
+  </dialog>
+  <dialog id="context" aria-labelledby="context-heading">
+    <div class="dialog-heading"><div><small>ON THE CHALKBOARD</small><h2 id="context-heading">Our conversation</h2></div><button class="icon close" aria-label="Close conversation context">×</button></div>
+    <dl class="context-notes" aria-live="polite">
+      <dt>Started with</dt><dd id="context-topic">A fresh chalkboard.</dd>
+      <dt>Current question</dt><dd id="context-question">Ask Professor a question to begin.</dd>
+      <dt>Professor's latest explanation</dt><dd id="context-answer">No explanation yet.</dd>
+    </dl>
+    <button class="primary" data-open="chat">Continue conversation</button>
+  </dialog>
+  <dialog id="materials">
+    <div class="dialog-heading"><div><small>THE CLASSROOM BOOKSHELF</small><h2>Your study materials</h2></div><button class="icon close" aria-label="Close materials">×</button></div>
+    <div class="batch-heading"><span id="batch-count">0 selected for this session</span><button data-open="sessions">Switch session</button><button data-open="chat">Study batch</button></div>
+    <div id="ingestion-progress" role="status" hidden><span class="study-loader" aria-hidden="true"></span><span id="ingestion-detail">Preparing materials…</span></div>
+    <p id="ingestion-confirmation" class="note" role="status"></p>
+    <label class="upload-zone">＋ Add Study Material<input id="file-input" type="file" accept=".pdf,.pptx,.docx,.txt,.md" multiple><span>PDF, PowerPoint, Word, text · up to 25 MB each</span></label>
+    <form id="url-form"><label class="sr-only" for="material-url">Material URL</label><input id="material-url" type="url" placeholder="https://… Paste a course link" required><button type="submit">Add link</button></form>
+    <p id="material-status" role="status"></p><ul id="import-queue" aria-label="Upload queue" aria-live="polite"></ul><ul id="material-list"></ul>
+    <p class="note">PDF, PowerPoint, Word, text, and web pages can be studied. Originals stay on this device. Scanned PDFs need OCR; images are not read.</p>
+  </dialog>
+  <dialog id="voice">
+    <div class="dialog-heading"><div><small>A CONVERSATION OUT LOUD</small><h2>Voice with Professor</h2></div><button class="icon close" aria-label="Close voice options">×</button></div>
+    <p>Local microphone transcription is not connected yet. You can keep chatting by text.</p>
+    <label class="voice-setting"><input id="read-aloud" type="checkbox"> Read replies aloud using a device voice</label><p id="voice-status" class="note"></p>
+    <button class="primary" data-open="chat">Talk by text</button><button id="stop-speech">Stop reading</button>
+  </dialog>
+  <script src="/static/characters/catalog.js"></script>
+  <script src="/static/characters/student-sprite.js"></script>
+  <script src="/static/classroom-world.js"></script>
+  <script src="/static/classroom-life.js?v=room-markers-23"></script>
+  <script src="/static/vendor/marked.js"></script>
+  <script src="/static/vendor/purify.min.js"></script>
+  <script src="/static/chat-tools.js?v=chat-space-19"></script>
+  <script src="/static/app.js?v=interaction-fix-26"></script>
+</body></html>
