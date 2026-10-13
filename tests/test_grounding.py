@@ -78,6 +78,13 @@ def test_grounding_selection_and_source_persistence(tmp_path):
         def __init__(self):
             self.calls = []
 
+        async def plan(self, messages):
+            if '"title": "IntentRoute"' in messages[0]["content"]:
+                return json.dumps({"route": "retrieve", "reasoning": "Read notes", "query": "regularization"})
+            if '"title": "RetrievalPlan"' in messages[0]["content"]:
+                return json.dumps({"reasoning": "Read notes", "query": "regularization", "document_ids": []})
+            return await self.chat(messages)
+
         async def chat(self, messages):
             self.calls.append(messages)
             record_usage({"prompt_eval_count": 10, "eval_count": 2}, "test")
@@ -97,7 +104,9 @@ def test_grounding_selection_and_source_persistence(tmp_path):
     assert [call["stage"] for call in usage["calls"]] == ["study planning", "answer"]
     assert reply == "It reduces overfitting [S1]."
     assert "selected original passages are the source of truth" in model.calls[1][0]["content"]
-    assert "For general tutoring" in model.calls[1][0]["content"]
+    assert "For general tutoring" not in model.calls[1][0]["content"]
+    assert "Evidence boundary for this answer" in model.calls[1][0]["content"]
+    assert "Do not add outside advice or techniques from memory" in model.calls[1][0]["content"]
 
 
 def test_bad_ai_selection_falls_back_without_erasing_text(tmp_path):

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from pathlib import Path
 from typing import Literal
@@ -30,6 +31,14 @@ app.mount("/static", StaticFiles(directory=static_dir), name="static")
 app.mount("/tileset", StaticFiles(directory=tileset_dir), name="tileset")
 
 
+ProfessorModel = Literal["llama3.2:3b", "phi4-mini:latest", "gpt-oss:20b"]
+model_load_lock = asyncio.Lock()
+
+
+class ModelLoadRequest(BaseModel):
+    model: ProfessorModel
+
+
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=12_000)
     conversation_id: str | None = None
@@ -37,6 +46,8 @@ class ChatRequest(BaseModel):
     document_ids: list[str] | None = Field(default=None, max_length=12)
     task: Literal["auto", "chat", "quiz", "simplify", "summary_conversation", "summary_material"] = "auto"
     quiz_question_id: str | None = Field(default=None, max_length=32)
+    next_question_id: str | None = Field(default=None, max_length=32)
+    model: ProfessorModel | None = None
 
 
 class ChatResponse(BaseModel):
@@ -68,18 +79,41 @@ async def index() -> FileResponse:
 
 
 @app.get("/api/health")
-async def health() -> dict:
-    return {"app": "ok", "ollama": await llm.health()}
+async def health(model: ProfessorModel | None = None) -> dict:
+    client = llm if model is None else OllamaClient(settings.ollama_url, model, settings.request_timeout_seconds)
+    return {"app": "ok", "ollama": await client.health()}
+
+
+@app.post("/api/models/load")
+async def load_model(request: ModelLoadRequest) -> dict:
+    if model_load_lock.locked() or activity.active:
+        raise HTTPException(409, "Wait for Professor to finish the current request before switching models.")
+    async with model_load_lock:
+        client = OllamaClient(settings.ollama_url, request.model, settings.request_timeout_seconds)
+        status = await client.health()
+        if not status["connected"] or not status["model_available"]:
+            raise HTTPException(503, "Selected model is unavailable. Install it in Ollama or choose another model.")
+        try:
+            await client.preload()
+        except OllamaError as exc:
+            raise HTTPException(503, str(exc)) from exc
+        return {"model": request.model, "loaded": True}
 
 
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest) -> ChatResponse:
+    if model_load_lock.locked():
+        raise HTTPException(409, "Professor is loading a model. Please try again when it is ready.")
     active_id = request.conversation_id or store.create_id()
     if active_id in activity.active:
         raise HTTPException(409, "Professor is already responding in this session.")
     try:
         if request.conversation_id and not store._path(active_id).exists():
             raise HTTPException(404, "Study session not found. Start a new session.")
+        if request.next_question_id:
+            pending = store.quiz(active_id)
+            if request.quiz_question_id or pending.get("question_id") != request.next_question_id or pending.get("phase") not in {"review", "complete"}:
+                raise HTTPException(409, "Quiz progress has changed. Reopen the session to refresh it.")
         if request.quiz_question_id:
             pending = store.quiz(active_id)
             if pending.get("question_id") != request.quiz_question_id or pending.get("phase") != "question" or not pending.get("active"):
@@ -88,9 +122,18 @@ async def chat(request: ChatRequest) -> ChatResponse:
         if ids is None and request.conversation_id and not request.document_id:
             ids = store.documents(request.conversation_id)
         with activity.track(active_id):
-            conversation_id, reply = await agent.reply(request.message.strip(), active_id, request.document_id, materials.root,
+            # A request owns its model for every stage; never mutate the shared client.
+            reply_agent = agent
+            if request.model is not None:
+                client = OllamaClient(settings.ollama_url, request.model, settings.request_timeout_seconds)
+                status = await client.health()
+                if not status["connected"] or not status["model_available"]:
+                    raise HTTPException(503, "Selected model is unavailable. Install it in Ollama or choose another model.")
+                reply_agent = ChatAgent(client, store)
+            conversation_id, reply = await reply_agent.reply(request.message.strip(), active_id, request.document_id, materials.root,
                                                        task=request.task, document_ids=ids,
-                                                       quiz_question_id=request.quiz_question_id)
+                                                       quiz_question_id=request.quiz_question_id,
+                                                       next_question_id=request.next_question_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except OllamaError as exc:

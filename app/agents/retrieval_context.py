@@ -43,8 +43,28 @@ def current_study_session(root: Path, identifiers: list[str]) -> dict:
         "selected_material_count": len(materials),
         "materials": materials,
         "guidance": "Use this to identify the active study batch and answer session-awareness questions. "
-                    "It is orientation data, not sufficient evidence for detailed claims about a source.",
+                    "It is orientation data, not sufficient evidence for detailed claims about a source. "
+                    "Selection, import status, and summaries do not indicate that the student has read, understood, "
+                    "or completed any part of the material. Do not infer learning progress from them.",
     }
+
+
+def reusable_evidence(root, identifiers, history):
+    """Reuse only original passages still present in the currently selected files."""
+    previous = next((m for m in reversed(history) if m.get("sources")), {})
+    sources = previous.get("sources", [])
+    if not sources or any(s.get("document_id") not in identifiers or s.get("variant") == "generated_summary" for s in sources):
+        return []
+    try:
+        documents = {identifier: json.loads((root / identifier / "chunks.json").read_text())
+                     for identifier in {s["document_id"] for s in sources}}
+        for source in sources:
+            if not any(c.get("id") == source.get("chunk_id") and c.get("text") == source.get("text")
+                       for c in documents[source["document_id"]]):
+                return []
+    except (OSError, ValueError, TypeError, KeyError):
+        return []
+    return [dict(s) for s in sources]
 
 
 def document_view(root, item, chunks, budget):

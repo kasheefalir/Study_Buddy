@@ -4,7 +4,7 @@ import json
 import pytest
 
 from app.agents.study_tools import review_materials, library
-from app.agents.quiz import quiz_turn
+from app.agents.quiz import _quiz_turn as quiz_turn
 from app.rag.library import write_json
 from app.storage.conversation_store import ConversationStore
 

@@ -7,7 +7,7 @@ import pytest
 from app.agents import context_budget
 from app.agents.chat_agent import ChatAgent
 from app.agents.quiz import (choice_question_problem, coverage_windows, repeated_question_problem,
-                             requested_count, quiz_turn, windows, select_windows)
+                             requested_count, _quiz_turn as quiz_turn, windows, select_windows)
 from app.agents.tasks import task_for
 from app.rag.library import write_json
 from app.storage.conversation_store import ConversationStore
@@ -22,6 +22,11 @@ class Model:
     async def structured_plan(self, messages, schema):
         self.calls.append(messages)
         payload = json.loads(messages[-1]["content"])
+        if schema["title"] == "IntentRoute":
+            actions = {"Quiz me with two questions": "start", "Review my missed answers": "review",
+                       "Stop the quiz and review what I got wrong": "review", "Next question": "next"}
+            return json.dumps({"route": "quiz", "mode": "quiz", "reasoning": "Quiz turn", "query": "",
+                               "activity_action": actions.get(payload["latest_message"], "keep")})
         if schema["title"] == "ChoiceQuality":
             return json.dumps({"valid": True, "stem_answered": True, "distractors_answer_stem": True, "issue": ""})
         if "message" in payload:
@@ -198,19 +203,19 @@ def test_count_override_persistence_feedback_review_and_completion(tmp_path):
     assert saved["results"][0]["student_answer"] == "All predicted positives"
     calls = len(model.calls)
     _, text = asyncio.run(agent.reply("Review my missed answers", session, document_ids=[identifier], materials_root=tmp_path / "documents"))
-    assert "All predicted positives" in text and len(model.calls) == calls
+    assert "All predicted positives" in text and len(model.calls) == calls + 1
     _, text = asyncio.run(agent.reply("Stop the quiz and review what I got wrong", session,
                                       document_ids=[identifier], materials_root=tmp_path / "documents"))
     assert "All predicted positives" in text
     assert store.quiz(session)["results"][0]["verdict"] == "incorrect"
     _, text = asyncio.run(agent.reply("Next question", session, document_ids=[identifier], materials_root=tmp_path / "documents"))
-    assert "2 of 2" in text and len(model.calls) == calls + 2
+    assert "2 of 2" in text and len(model.calls) == calls + 3
     model.verdict = "correct"
     _, text = asyncio.run(agent.reply("Actual positives found", session, document_ids=[identifier], materials_root=tmp_path / "documents"))
     assert text.startswith("**Correct**") and "1 of 2 correct" in text
     calls = len(model.calls)
     _, text = asyncio.run(agent.reply("Next question", session, document_ids=[identifier], materials_root=tmp_path / "documents"))
-    assert "Quiz complete" in text and len(model.calls) == calls
+    assert "Quiz complete" in text and len(model.calls) == calls + 1
     assert len(store.quiz(session)["window_reviews"]) == 2
     assert task_for("Review missed answers", "auto", store.quiz(session)) == "quiz"
 

@@ -1,0 +1,8 @@
+[
+  {"name":"comparison","question":"How do closest-point distances compare with average distances in low versus high dimensions?","expected":"Supported by S3. Low: much closer; high: often not much closer. No reversed comparison.","citation_entities":["low-dimensional"]},
+  {"name":"exception","question":"What exception does the passage give to the claim that closeness means little in many dimensions?","expected":"Supported by S3: structure making the data behave as if much lower-dimensional."},
+  {"name":"noise","question":"Why can an extra dimension cause a problem even when it is only noise?","expected":"Supported by S3: another opportunity for points to be further apart; closeness requires closeness in every dimension."},
+  {"name":"sample_count","question":"How many distances are computed for each dimension, and which dimensions are tested?","expected":"Supported by S1: 10,000 distances per dimension, dimensions 1 through 100 inclusive."},
+  {"name":"missing_number","question":"What is the exact minimum-to-average distance ratio at dimension 73?","expected":"Insufficient evidence. Code and captions do not supply the value."},
+  {"name":"missing_method","question":"Which regularization method and parameter do these passages recommend to fix the curse of dimensionality?","expected":"Insufficient evidence. Neither is supplied."}
+]

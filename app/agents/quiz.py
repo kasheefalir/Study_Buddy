@@ -1,4 +1,4 @@
-"""Incremental, bounded quizzes. Saved windows are reviewed only as needed."""
+"""Bounded question preparation and a persisted quiz playback loop."""
 from copy import deepcopy
 from difflib import SequenceMatcher
 from uuid import uuid4
@@ -9,6 +9,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from app.agents.context_budget import estimate, input_limit
+from app.agents.activity import preparing_question
 from app.agents.study_tools import OUTPUTS, library, passages, structured, structured_messages
 from app.rag.library import candidates
 
@@ -342,7 +343,40 @@ def choice_feedback_problem(data):
     return ""
 
 
-async def quiz_turn(root, identifiers, message, quiz, llm, recent=None):
+QUESTION_FIELDS = ("pending_question", "expected_answer", "sources", "question_id",
+                   "options", "answer_key", "correct_index")
+
+
+def question_text(quiz):
+    options = "\n\n" + "\n\n".join(f'**{chr(65+i)}.** {option}' for i, option in enumerate(quiz.get("options", []))) if quiz.get("options") else ""
+    return f'**Question {quiz["cursor"] + 1} of {quiz["total"]}**\n\n{quiz["pending_question"]}{options}'
+
+
+async def quiz_turn(root, identifiers, message, quiz, llm, recent=None, activity_action=None):
+    response, state, sources = await _quiz_turn(root, identifiers, message, quiz, llm, recent, activity_action)
+    if (response is None or state.get("phase") != "question" or not state.get("pending_question")
+            or state.get("question_id") == quiz.get("question_id")):
+        return response, state, sources
+    if len(state.get("prepared_questions", [])) == state["total"]:
+        return response, state, sources
+    # Build on a private copy; failed preparation never commits a partial quiz.
+    current = deepcopy(state)
+    bank = [None] * state["total"]
+    for index, item in enumerate(state.get("prepared_questions", [])[:state["total"]]):
+        bank[index] = item
+    bank[state["cursor"]] = {key: deepcopy(state.get(key)) for key in QUESTION_FIELDS}
+    state["prepared_questions"] = bank
+    for index in range(state["cursor"] + 1, state["total"]):
+        state.update(cursor=index, phase="question", pending_question="")
+        with preparing_question(index + 1, state["total"]):
+            _, state, _ = await _quiz_turn(root, identifiers, "Next question", state, llm, recent, "next")
+        state["prepared_questions"][index] = {key: deepcopy(state.get(key)) for key in QUESTION_FIELDS}
+    state.update({key: current.get(key) for key in QUESTION_FIELDS})
+    state.update(cursor=current["cursor"], phase=current["phase"])
+    return response, state, sources
+
+
+async def _quiz_turn(root, identifiers, message, quiz, llm, recent=None, activity_action=None):
     quiz = deepcopy(quiz)  # A failed model call must not advance saved progress.
     # Repair the old router's trailing format request scored as an answer.
     results = quiz.get("results", [])
@@ -350,9 +384,18 @@ async def quiz_turn(root, identifiers, message, quiz, llm, recent=None):
         results.pop()
         quiz.update(cursor=len(results), phase="question", active=True)
     acknowledgement = ""
-    if REVIEW.search(message):
+    if activity_action == "review" or (activity_action is None and REVIEW.search(message)):
         text, sources = missed_review(quiz)
         return text, quiz, sources
+    if activity_action == "resume" and quiz.get("phase") == "complete":
+        return completion(quiz), quiz, []
+    if activity_action == "resume" and quiz.get("phase") == "review":
+        return "You've already answered this question. Choose Next question to advance, or ask about the explanation.", quiz, quiz.get("sources", [])
+    if activity_action == "resume" and quiz.get("pending_question"):
+        # Resuming is not an answer submission or permission to advance.
+        return quiz["pending_question"], quiz, quiz.get("sources", [])
+    if activity_action == "next":
+        message = "Next question"
     choice_answer = selected_option(message, quiz)
     if quiz.get("version") == 2 and choice_answer is None and not NEXT.fullmatch(message) and (quiz.get("active") or CHANGE.search(message)):
         intent, _ = await bounded(llm, "quiz intent",
@@ -368,6 +411,7 @@ async def quiz_turn(root, identifiers, message, quiz, llm, recent=None):
         if action == "discuss":
             return None, quiz, []
         if action == "change":
+            quiz.pop("prepared_questions", None)
             quiz["format"] = "multiple_choice" if re.search(r"multiple[ -]choice", message, re.I) else intent["format"]
             quiz["guidelines"] = intent["guidelines"] or message[:300]
             if intent["focus"] is not None:
@@ -437,6 +481,10 @@ async def quiz_turn(root, identifiers, message, quiz, llm, recent=None):
             return None, quiz, []
     cursor = quiz["cursor"]
     if not quiz.get("pending_question"):
+        bank = quiz.get("prepared_questions", [])
+        if cursor < len(bank) and bank[cursor]:
+            quiz.update(deepcopy(bank[cursor]))
+            return question_text(quiz), quiz, quiz["sources"]
         sources, item = [], {"id": ""}
         if books:
             window = quiz["window_plan"][cursor]
@@ -449,6 +497,7 @@ async def quiz_turn(root, identifiers, message, quiz, llm, recent=None):
         choice = quiz.get("format") == "multiple_choice"
         prompt = WINDOW_PROMPT + (" Provide four distinct plausible options without letter prefixes and exactly one defensible correct option. Copy its exact option text verbatim into correct_answer. Never supply an option number. Do not include synonymous options or reveal the answer in the question. Before returning, compare every option with the other three so that no two choices state the same answer." if choice else "")
         previous_questions = [r["question"] for r in quiz["results"]]
+        previous_questions += [item["pending_question"] for item in quiz.get("prepared_questions", []) if item]
         request = {"focus": quiz["focus"], "format": quiz.get("format", "short_answer"),
                    "guidelines": quiz.get("guidelines", ""), "latest_request": quiz.pop("regenerate_request", ""),
                    "concept": window.get("concept", "") if books else "",
@@ -459,13 +508,15 @@ async def quiz_turn(root, identifiers, message, quiz, llm, recent=None):
                 prompt + "\n\nYour previous draft could not be used: " + repair
                 + " Regenerate the whole question with four new, distinct choices."
             )
-            data, sources = await bounded(llm, "quiz choices" if choice else "quiz window", attempt_prompt,
-                                           request, sources)
+            with preparing_question(cursor + 1, quiz["total"]):
+                data, sources = await bounded(llm, "quiz choices" if choice else "quiz window", attempt_prompt,
+                                               request, sources)
             repair = choice_question_problem(data) if choice else ""
             if not repair:
                 repair = repeated_question_problem(data["question"], previous_questions)
             if not repair and choice:
-                repair = await choice_quality_problem(llm, data, sources)
+                with preparing_question(cursor + 1, quiz["total"]):
+                    repair = await choice_quality_problem(llm, data, sources)
             if not repair:
                 break
         if repair:

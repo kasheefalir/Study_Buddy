@@ -2,7 +2,7 @@ import asyncio
 import json
 
 from app.agents.chat_agent import ChatAgent
-from app.agents.quiz import quiz_turn
+from app.agents.quiz import _quiz_turn as quiz_turn
 from app.storage.conversation_store import ConversationStore
 
 
@@ -10,6 +10,11 @@ class Model:
     def __init__(self):
         self.stages = []
         self.action = "change"
+        self.questions = iter(["Which description defines recall?", "How does precision assess predictions?",
+                               "Why do outliers affect the mean?", "When should a dataset be normalized?",
+                               "What is a confidence interval?", "How is a vector indexed?",
+                               "What does entropy represent?", "Why use a validation set?",
+                               "How does gradient descent work?", "What is conditional probability?"])
 
     async def structured_plan(self, messages, schema):
         self.stages.append(schema["title"])
@@ -18,7 +23,7 @@ class Model:
         if schema["title"] == "QuizIntent":
             return json.dumps({"action": self.action, "format": "multiple_choice", "guidelines": "Use four options.", "acknowledgement": "Let's switch to multiple choice."})
         if schema["title"] == "ChoiceQuestion":
-            return json.dumps({"summary": "Recall is sensitivity.", "question": "Which description defines recall?",
+            return json.dumps({"summary": "Recall is sensitivity.", "question": next(self.questions),
                 "options": ["Actual positives found", "Predicted positives correct", "All predictions correct", "Actual negatives found"],
                 "correct_answer": "Actual positives found", "expected_answer": "Recall is the proportion of actual positives identified."})
         if schema["title"] == "ChoiceQuality":
@@ -60,7 +65,7 @@ def test_multiple_choice_request_regenerates_without_grading(tmp_path):
     model = Model()
     _, text = asyncio.run(ChatAgent(model, store).reply("make the questions multiple choice", session, document_ids=[]))
     updated = store.quiz(session)
-    assert model.stages == ["QuizIntent", "ChoiceQuestion", "ChoiceQuality"]
+    assert model.stages == ["QuizIntent"] + ["ChoiceQuestion", "ChoiceQuality"] * 10
     assert "Question 1 of 10" in text and "**A.**" in text and "**D.**" in text
     assert not updated["results"] and updated["cursor"] == 0
     assert updated["correct_index"] == 0 and updated["format"] == "multiple_choice"

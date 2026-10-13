@@ -113,6 +113,8 @@ function initChatTools() {
     if (!$("#message").value.trim()) {
       $("#message").value = button.dataset.prompt;
       $("#task-mode").value = button.dataset.task;
+      delete $("#message").dataset.nextQuestionId;
+      if (button.id === "next-question") $("#message").dataset.nextQuestionId = button.dataset.questionId;
     }
     $("#message").focus();
   });

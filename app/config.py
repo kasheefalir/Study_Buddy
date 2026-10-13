@@ -10,6 +10,7 @@ class Settings:
     response_review_enabled: bool = os.getenv("RESPONSE_REVIEW_ENABLED", "false").lower() == "true"
     ollama_url: str = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434")
     ollama_model: str = os.getenv("OLLAMA_MODEL", "llama3.2:3b")
+    ollama_think: str = os.getenv("OLLAMA_THINK", "")
     embedding_model: str = os.getenv("EMBEDDING_MODEL", "nomic-embed-text")
     request_timeout_seconds: float = float(os.getenv("OLLAMA_TIMEOUT", "120"))
     max_history_messages: int = int(os.getenv("MAX_HISTORY_MESSAGES", "16"))

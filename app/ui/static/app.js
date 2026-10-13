@@ -52,6 +52,44 @@ for (const character of StudentCharacters) {
 updateStudentPicker();
 let conversationId = localStorage.getItem("study-buddy-conversation");
 let busy = false;
+let switchingModel = false;
+let modelStatusVersion = 0;
+const modelLabels = {"llama3.2:3b": "Llama 3.2", "phi4-mini:latest": "Phi-4 Mini", "gpt-oss:20b": "GPT-OSS 20B"};
+const modelLabel = (model) => modelLabels[model] || model;
+const professorModels = Object.keys(modelLabels);
+let professorModel = localStorage.getItem("buddy-professor-model");
+if (!professorModels.includes(professorModel)) professorModel = professorModels[0];
+$("#professor-model").value = professorModel;
+$("#professor-model").onchange = async () => {
+  if (busy || switchingModel) {$("#professor-model").value = professorModel; return;}
+  const selected = $("#professor-model").value;
+  if (selected === professorModel) return;
+  switchingModel = true;
+  modelStatusVersion++;
+  $("#professor-model").disabled = true;
+  $("#model-switch-error").textContent = "";
+  const loadingText = "Loading " + modelLabel(selected) + "...";
+  $("#status").textContent = loadingText;
+  $("#status").dataset.state = "loading";
+  $("#model-state").textContent = loadingText;
+  $("#model-loading-title").textContent = loadingText;
+  const timer = setTimeout(() => $("#model-loading").showModal(), 200);
+  try {
+    await request("/api/models/load", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({model: selected})});
+    professorModel = selected;
+    localStorage.setItem("buddy-professor-model", professorModel);
+  } catch (error) {
+    $("#professor-model").value = professorModel;
+    $("#model-switch-error").textContent = error.message;
+  } finally {
+    clearTimeout(timer);
+    $("#model-loading").close();
+    switchingModel = false;
+    $("#professor-model").disabled = false;
+    refreshProfessorStatus();
+  }
+};
+$("#model-loading").addEventListener("cancel", (event) => event.preventDefault());
 let deviceVoice;
 let conversationMessages = [];
 let selectedMaterial = "";
@@ -316,7 +354,8 @@ function updateQuizChoices(current) {
 }
 function updateQuizActions(question) {
   const reviewReady = Boolean(question?.answered);
-  $("#next-question").hidden = !reviewReady;
+  $("#next-question").hidden = !reviewReady || question.number >= question.total;
+  $("#next-question").dataset.questionId = question?.id || "";
   $("#ask-question").hidden = !reviewReady;
   $("#message").placeholder = reviewReady ? "Ask about this question…" : "Ask a question…";
 }
@@ -344,21 +383,29 @@ async function restoreChat() {
 $("#chat-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const message = $("#message").value.trim();
-  if (!message || busy || materialOperations || batchSaving) return;
+  if (!message || busy || switchingModel || materialOperations || batchSaving) return;
   const outgoing = addMessage("user", message);
+  const nextQuestionId = $("#message").dataset.nextQuestionId || null;
+  delete $("#message").dataset.nextQuestionId;
   $("#message").value = "";
   const task = $("#task-mode").value;
   $("#task-mode").value = "auto";
-  await sendChatMessage(message, outgoing, task);
+  await sendChatMessage(message, outgoing, task, null, nextQuestionId);
 });
-async function sendChatMessage(message, outgoing, task = "auto", quizQuestionId = null) {
-  if (busy) return;
+$("#message").addEventListener("input", () => {delete $("#message").dataset.nextQuestionId;});
+async function sendChatMessage(message, outgoing, task = "auto", quizQuestionId = null, nextQuestionId = null) {
+  if (busy || switchingModel) return;
   busy = true; $("#chat-form button").disabled = true; $("#new-chat").disabled = true;
+  const requestModel = professorModel;
+  $("#professor-model").disabled = true;
   outgoing?.querySelector(".retry")?.remove();
   outgoing?.classList.remove("failed");
   const quizRequest = task === "quiz" || /\b(quiz me|test me|next question)\b/i.test(message);
-  const pending = addMessage("assistant", quizRequest ? "Professor is preparing your quiz response…" : selectedMaterials.length ? "Professor is reviewing relevant passages…" : "Professor is thinking…"); pending.classList.add("pending");
-  pending.querySelector(".message-heading").prepend(makeStudyLoader());
+  const pending = addMessage("assistant", quizRequest ? "Professor is preparing your quiz response…" : "Professor is thinking…"); pending.classList.add("pending");
+  const thinkingHead = document.createElement("span");
+  thinkingHead.className = "professor-thinking";
+  thinkingHead.setAttribute("aria-hidden", "true");
+  pending.querySelector(".message-heading").prepend(thinkingHead);
   $("#chat-error").textContent = "";
   let activityTimer;
   try {
@@ -374,7 +421,7 @@ async function sendChatMessage(message, outgoing, task = "auto", quizQuestionId 
         }
       } catch { /* The chat request reports actionable failures. */ }
     }, 700);
-    const data = await request("/api/chat", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({message, conversation_id: conversationId, document_ids: selectedMaterials, task, quiz_question_id: quizQuestionId})});
+    const data = await request("/api/chat", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({message, conversation_id: conversationId, document_ids: selectedMaterials, task, quiz_question_id: quizQuestionId, next_question_id: nextQuestionId, model: requestModel})});
     pending.remove();
     conversationId = data.conversation_id; localStorage.setItem("study-buddy-conversation", conversationId);
     addMessage("assistant", data.message, data.sources || [], data.usage, message, data.quiz_question);
@@ -403,12 +450,12 @@ async function sendChatMessage(message, outgoing, task = "auto", quizQuestionId 
         $("#chat-error").textContent = "The study context changed. Send this question again in the current session."; return;
       }
       outgoing.remove(); $("#messages").append(outgoing);
-      sendChatMessage(message, outgoing, task, quizQuestionId);
+      sendChatMessage(message, outgoing, task, quizQuestionId, nextQuestionId);
     };
     outgoing.append(retry);
     return false;
   }
-  finally { clearInterval(activityTimer); busy = false; $("#chat-form button").disabled = false; $("#new-chat").disabled = false; refreshProfessorStatus(); }
+  finally { clearInterval(activityTimer); busy = false; $("#professor-model").disabled = false; $("#chat-form button").disabled = false; $("#new-chat").disabled = false; refreshProfessorStatus(); }
 }
 $("#message").addEventListener("keydown", (event) => {
   if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); $("#chat-form").requestSubmit(); }
@@ -599,22 +646,28 @@ $("#stop-speech").onclick = () => window.speechSynthesis?.cancel();
 initChatTools(); updateVoices(); restoreChat();
 let checkingProfessor = false;
 async function refreshProfessorStatus() {
-  if (checkingProfessor) return;
+  if (checkingProfessor || switchingModel) return;
   checkingProfessor = true;
+  const version = modelStatusVersion;
+  const statusModel = professorModel;
   try {
-    const {ollama} = await request("/api/health");
-    $("#professor-model").textContent = ollama.model;
+    const {ollama} = await request("/api/health?model=" + encodeURIComponent(statusModel));
+    if (statusModel !== professorModel || switchingModel || version !== modelStatusVersion) return;
+    for (const option of $("#professor-model").options) {
+      option.disabled = ollama.connected && !(ollama.models || []).includes(option.value);
+    }
     let state, text, detail;
     if (!ollama.connected) {state = "offline"; text = "Professor is offline"; detail = "Ollama is not reachable";}
     else if (!ollama.model_available) {state = "missing"; text = "Professor needs a model"; detail = "Configured model is not installed";}
-    else if (ollama.model_loaded === true) {state = "ready"; text = "● Professor is ready"; detail = "Loaded locally in Ollama";}
+    else if (ollama.model_loaded === true) {state = "ready"; text = "● Professor is ready · " + modelLabel(statusModel); detail = "Loaded locally in Ollama";}
     else if (ollama.model_loaded === false) {state = "idle"; text = "Professor is resting"; detail = "Installed · loads when you send a question";}
     else {state = "unknown"; text = "Professor status unconfirmed"; detail = "Installed · loaded state unavailable";}
     $("#status").textContent = text; $("#status").dataset.state = state; $("#model-state").textContent = detail;
   } catch {
+    if (switchingModel || version !== modelStatusVersion) return;
     $("#status").textContent = "Cannot reach Professor"; $("#status").dataset.state = "offline";
     $("#model-state").textContent = "Backend connection unavailable";
-  } finally {checkingProfessor = false;}
+  } finally {checkingProfessor = false; if (statusModel !== professorModel || version !== modelStatusVersion) refreshProfessorStatus();}
 }
 refreshProfessorStatus();
 setInterval(() => {if (!document.hidden) refreshProfessorStatus();}, 15000);

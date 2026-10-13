@@ -1,0 +1,21 @@
+{
+  "source_hash": "bdecaf7fa202fa398430b03666c4d9b1a95285e26fe2eccad8d7854a51e98c16",
+  "chunk_ids": [229, 230, 231],
+  "review": "Manual reference IDs fixed before held-out model calls. Allowed IDs include useful context; coverage is a diagnostic, not a semantic grade.",
+  "cases": {
+    "dependence": ["S1:P5", "S1:P6"],
+    "coin": ["S1:P7"],
+    "condition": ["S2:P3"],
+    "independent_update": ["S3:P2"],
+    "missing_trials": [],
+    "missing_die": []
+  },
+  "allowed": {
+    "dependence": ["S1:P5", "S1:P6", "S1:P7", "S1:P8", "S2:P2", "S3:P2"],
+    "coin": ["S1:P5", "S1:P6", "S1:P7", "S1:P8"],
+    "condition": ["S2:P3", "S3:P1"],
+    "independent_update": ["S3:P2", "S2:P2", "S2:P3", "S1:P5", "S1:P6"],
+    "missing_trials": [],
+    "missing_die": []
+  }
+}

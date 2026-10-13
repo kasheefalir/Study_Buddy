@@ -1,47 +1,240 @@
 # Local AI Study Buddy
 
-On this Mac, run `study buddy` from a new terminal. The launcher starts a local
-Ollama service if necessary, downloads the configured model if missing, preloads
-it, and starts the app. Ollama and the Python dependencies must already be installed.
-First-time model downloads require internet access. Open http://127.0.0.1:8000.
-Use `BUDDY_PORT=8001 study buddy` if another server occupies port 8000.
+Study Buddy is a study app that helps you work through your own class materials
+with an AI tutor called **Professor**. Bring your notes, slides, or textbook PDFs,
+then ask questions, get explanations, or practice with a quiz. It opens in your
+web browser, with a small interactive classroom as your starting point.
 
-Ctrl+C stops the app and any Ollama process started by this launcher; an existing
-Ollama service is left running. The model stays warm for 30 minutes after startup
-or the latest chat request and reloads on demand afterward.
+## What You Can Do
 
-A local-first study assistant powered by Ollama. Phase 1 provides a working chat API,
-bounded conversation memory, local JSON persistence, and a minimal browser client.
+- **Study your own materials.** Add PDFs, Word documents, PowerPoint slides, text
+  files, or a public webpage to your bookshelf.
+- **Ask Professor for help.** Ask a specific question, request a simpler
+  explanation, or ask for a summary. You can open the source passages used in a
+  material-based answer to check them yourself.
+- **Practice with quizzes.** Choose a quiz length or use the default of ten
+  questions. Answer one question at a time, read the feedback, and ask follow-up
+  questions before moving on. Review your missed answers afterward.
+- **Keep your study sessions organized.** Group materials by class or topic,
+  return to saved conversations, and bookmark useful explanations.
+- **Choose your AI model.** Switch between installed Llama 3.2, Phi-4 Mini, and
+  GPT-OSS 20B models in the app. Larger models need more computer memory.
+
+## Your First Study Session
+
+Once the app is set up and running:
+
+1. Click the classroom bookshelf to add your materials.
+2. Select the materials you want to study in the current session.
+3. Click Professor to open the chat. Try "Explain the main idea in these notes"
+   or "Give me a five-question quiz."
+4. During a quiz, select an answer and read the explanation. Choose **Next
+   question** when ready, or ask about the question you just answered.
+
+Quizzes prepare their questions and choices before they begin, so the initial
+wait can take several minutes. After preparation, Next question opens a saved
+question; answer explanations still take time to generate.
+
+## Where Your Work Lives
+
+With the local models described in this guide, AI responses are generated on
+your computer through **Ollama**, the software that runs the AI models. Your
+uploaded materials and study conversations are stored locally rather than in a
+Study Buddy cloud account. Bookmarked explanations are saved in your browser.
+
+Internet access is needed for installation, model downloads, and importing
+webpages. Once everything is installed, you can study local files with local
+models without an internet connection. There is no automatic sync between devices.
+
+## Things to Know
+
+Study Buddy is still being developed. Professor can misunderstand a question,
+miss relevant information, or give an incorrect answer. Check important answers
+against your materials; source links help you check, but are not a guarantee of
+accuracy. A short quiz will not cover every page or concept in a textbook.
+
+Text-based documents work best. Scanned PDFs and information contained only in
+images or diagrams are not currently read. Speed depends on your computer and
+the selected model. GPT-OSS 20B is a higher-memory option, not an option for an
+8 GB computer; performance on 8 GB machines still needs testing for the smaller
+models as well.
+
+The sections below explain installation and provide technical details for people
+who want to configure or contribute to the app.
 
 ## Required Downloads
 
-1. Python 3.11+.
-2. [Ollama for macOS or Windows](https://ollama.com/download). Install the
-   application/runtime once before starting Study Buddy. The launcher needs the
-   `ollama` command available in your terminal, or an already-running Ollama service.
-3. Python packages listed in `requirements.txt`, installed with pip during setup.
-4. `llama3.2:3b` model weights. The launcher downloads these automatically on first
-   use if missing; no separate manual model download is required.
+This is a guided setup, not yet a one-click installer. You do not need to know
+how to code, but you will use a terminal: a window where you enter commands.
+Keep an internet connection available for the first setup and model downloads.
 
-Ollama is a system dependency, not a pip dependency. Installing a Python package
-named `ollama` does not install the runtime; this app communicates with the
-runtime directly through its local HTTP API.
+1. Install [Python](https://www.python.org/downloads/) version 3.11 or newer for
+   your operating system. Python runs the app. On Windows, enable **Add Python
+   to PATH** if the installer offers it, so commands can find Python.
+2. Install [Ollama](https://ollama.com/download) for your operating system and
+   open it once. Ollama runs the AI models. It is a separate application, not a
+   Python package. Check its download page for current system requirements.
+3. Download Study Buddy as described below. The setup commands install its
+   supporting Python packages. The launcher downloads the default AI model,
+   `llama3.2:3b`, automatically if it is missing.
+
+Allow several gigabytes of free disk space for the app, models, and your materials.
+The default model alone is approximately 2 GB. Downloads and the first startup
+can take several minutes or longer, depending on your connection and computer.
 
 ## Setup
 
-Install Python and Ollama from the list above first, then install the Python
-dependencies and start the app:
+### Download Study Buddy
+
+1. Open the [Study Buddy repository](https://github.com/kasheefalir/Study_Buddy).
+2. Click the green **Code** button, then **Download ZIP**. You do not need Git.
+3. Extract the ZIP: on Mac, double-click it; on Windows, right-click it and choose
+   **Extract All**. Do not run the app from inside the ZIP.
+4. Move the extracted folder somewhere you can keep it, such as Documents.
+   Open it and locate `requirements.txt`, `start-mac.command`, and
+   `start-windows.bat`. This is your **project folder**; its name may be
+   `Study_Buddy-main`. Keep this folder because it will also hold your saved data.
+
+Follow only the section for your computer. Run commands one line at a time,
+pressing Enter after each. Wait for a command to finish before running the next;
+stop and check Troubleshooting if you see an error.
+
+### Mac: First-Time Setup
+
+1. Install Python and Ollama from Required Downloads, then open a new **Terminal**
+   window (find Terminal using Spotlight).
+2. Type `cd` followed by a space, drag your extracted project folder from Finder
+   into Terminal, and press Enter. This tells Terminal which folder to work in.
+3. Check Python, then create the app's private Python environment and install its
+   supporting packages:
 
 ```bash
+python3 --version
 python3 -m venv .venv
-source .venv/bin/activate
-python3 -m pip install -r requirements.txt
+.venv/bin/python -m pip install -r requirements.txt
+```
+
+The version should be 3.11 or newer. The hidden `.venv` folder keeps Study Buddy's
+packages separate from other Python programs on your computer.
+
+4. Start Study Buddy from the same Terminal window:
+
+```bash
 chmod +x start-mac.command
 ./start-mac.command
 ```
 
-On Windows, activate the virtual environment and run `start-windows.bat`. Open
-<http://127.0.0.1:8000>. Interactive API documentation is at `/docs`.
+### Windows: First-Time Setup
+
+1. Install Python and Ollama from Required Downloads.
+2. Open your extracted project folder in **File Explorer**. Click the address
+   bar, type `cmd`, and press Enter. This opens **Command Prompt** in the correct
+   folder. These commands are for Command Prompt, not PowerShell.
+3. Check Python, then create the app's private Python environment and install its
+   supporting packages:
+
+```bat
+python --version
+python -m venv .venv
+.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+The version should be 3.11 or newer. If `python` is not recognized but
+`py --version` works, use `py -m venv .venv` for the second command instead.
+The remaining commands use the environment's Python directly; activation is
+not required.
+
+4. Start Study Buddy from the same Command Prompt window:
+
+```bat
+start-windows.bat
+```
+
+### Open the App and Start Studying
+
+1. Leave the terminal window open. The launcher starts Ollama if necessary,
+   downloads the default model if missing, and loads Professor. A model download
+   may sit at the download message without showing a percentage; it can take
+   several minutes or longer.
+2. Wait for `Professor is loaded` and then `Uvicorn running on
+   http://127.0.0.1:8000`. The second message confirms the web server has started.
+3. Open [Study Buddy](http://127.0.0.1:8000) in your browser. This address points
+   to your own computer, not a public website. The browser may not open automatically.
+4. Click the bookshelf, import a material, and wait until it is ready. The first
+   PDF or webpage import may also download a smaller search model,
+   `nomic-embed-text`. Then click Professor and ask a question or start a quiz.
+
+You only need the default model to begin. Other models in the selector must be
+installed in Ollama before you can switch to them. GPT-OSS 20B needs substantially
+more memory and is not intended for an 8 GB computer.
+
+### Reopen or Stop Study Buddy
+
+After the first setup, you do not need to reinstall the packages or recreate
+`.venv`. Open a terminal in the same project folder using the steps above, then
+run `./start-mac.command` on Mac or `start-windows.bat` in Windows Command Prompt.
+On Windows you can also double-click `start-windows.bat`; use Command Prompt if
+the window closes before you can read an error. Open the same browser address
+after the server starts.
+
+To stop the app, click its terminal window and press **Ctrl+C** (Control+C on
+Mac, not Command+C). Closing the browser tab does not stop the server. The
+launcher stops any Ollama service it started; an already-running Ollama service
+is left running. Saved materials and conversations remain in the project folder.
+The model stays loaded for up to 30 minutes after startup or the latest chat
+request, and loads again when needed.
+
+### Troubleshooting
+
+| What you see | What to try |
+| --- | --- |
+| `python3`, `python`, or `py` is not found, or Windows opens the Store | Finish installing Python, then close and reopen the terminal. On Windows, try `py --version`; if that works, use `py -m venv .venv`. Otherwise check the installer's command/PATH options. |
+| `requirements.txt` or a start script cannot be found | Your terminal is in the wrong folder. Return to the extracted project folder containing those files using the Mac or Windows steps above. |
+| `Missing app dependencies` or `No module named ...` | From the project folder, rerun `.venv/bin/python -m pip install -r requirements.txt` on Mac, or `.venv\Scripts\python.exe -m pip install -r requirements.txt` on Windows. If `.venv` is missing, first repeat the environment-creation step. |
+| Ollama is missing, not running, or cannot be reached | Install and open the Ollama application, then restart Study Buddy. Installing a Python package called `ollama` is not a substitute. |
+| The download fails | Check your internet connection and free disk space, then restart the launcher. Model downloads need internet even though later local-file study can work offline. |
+| The browser says it cannot connect | Keep the terminal open and wait for `Uvicorn running`. Use the exact address printed there. If the terminal shows an error, fix that error first. |
+| Mac says `Permission denied` for the start script | From the project folder, run `chmod +x start-mac.command`, then `./start-mac.command`. If macOS shows a security warning instead, verify the download source; do not disable system security protections. |
+| Replies or quiz preparation are slow | Wait for the progress message to finish, close unneeded memory-heavy apps, and use a smaller installed model. Preparing a whole quiz can take several minutes. |
+
+**Port already in use:** another app or another Study Buddy instance is using
+the address. If Study Buddy is already running, use its existing browser page.
+Otherwise, choose another port without stopping an unrelated program.
+
+On Mac, from the project folder:
+
+```bash
+BUDDY_PORT=8001 ./start-mac.command
+```
+
+On Windows, from Command Prompt in the project folder:
+
+```bat
+set BUDDY_PORT=8001
+start-windows.bat
+```
+
+Then open [Study Buddy on port 8001](http://127.0.0.1:8001). Use the same port
+on later launches to keep access to that browser's saved bookmarks.
+
+If you need help, share the exact error text and whether you are on Mac or
+Windows. Remove personal information before sharing logs or screenshots.
+These steps match the launch scripts; they are not a claim that a fresh install
+has been tested on every Mac and Windows configuration.
+
+### Existing Local Mac Shortcut
+
+This shortcut is specific to the original development Mac, not included as an
+installed command for new users. On that Mac, run `study buddy` from a new
+terminal, or `BUDDY_PORT=8001 study buddy` to use port 8001. It uses the same
+startup and shutdown behavior described above. Python packages and Ollama must
+already be installed.
+
+## Technical Reference
+
+The sections below are optional for everyday use. Developers can also open
+interactive API documentation at [localhost /docs](http://127.0.0.1:8000/docs)
+while the app is running (adjust the port if needed).
 
 ## Frontend API
 
@@ -72,6 +265,28 @@ arbitrary tools. Answers and citations are model-generated, not independently
 verified. General explanations use the conversational tutor, with an optional
 batch-scoped material-tool call. Material quizzes use the incremental window,
 question and feedback flow described below. There is no automatic answer rewrite.
+For material-backed chat answers, Professor links explanations to source labels.
+When the model resolves a request as requiring source evidence, that requirement
+survives retrieval planning. An empty retrieval gets one model-directed retry;
+if no passages reach the writer, the app reports the retrieval gap instead of
+answering from memory. Follow-up evidence checks receive the resolved question.
+The optional general reflection pass does not rewrite source-checked answers.
+The existing intent decision can reuse prior original passages for a follow-up;
+reuse is allowed only if their text still matches the currently selected files.
+The source writer receives a compact question/evidence packet, not the transcript
+or session summaries. Its existing retry now receives rejected claims and specific
+feedback, retaining supported points and identifying partial answers when needed.
+This replaces the generic regeneration step; it does not add another review loop.
+The app validates the labels and supplies the actual passage text to a focused
+model check that attempts to remove unsupported explanations. If none pass, the answer
+acknowledges the evidence gap. Invalid structured answers get one retry.
+This checks up to four points sequentially per draft, with at most one repaired
+draft (ten model calls total for writing and verification). It reduces unsupported
+additions; it does not guarantee that the model interprets every passage correctly.
+Each check sees just one point and its cited evidence, deduplicated within that
+check. Duplicate or missing verdicts fail validation. See
+`docs/grounding-evaluation.md` for observed limitations and the opt-in live test;
+passing mocked unit tests is not evidence of model-level answer accuracy.
 Word DOCX body paragraphs and table text are extracted with paragraph references;
 headers, footnotes and images are not read. Text PDFs support page citations and
 hybrid keyword/embedding retrieval; scanned pages still require OCR.
@@ -107,17 +322,19 @@ over the session's batch only. Tool decisions and returned passages are stored
 in `data/study-reviews`. No arbitrary URLs, code execution or cross-session
 material access is permitted through these operations.
 
-Quizzes default to five multiple-choice questions; explicit totals (1-50, including natural-language
+Quizzes default to ten multiple-choice questions; explicit totals (1-50, including natural-language
 requests) override the default. "One question at a time" does not mean one total.
 Completed study overviews supply chapter-level concepts and original passages
 for quizzes. Until an overview is ready, material text is divided into overlapping
 three-passage windows in code. A short
 quiz samples windows across documents and throughout each document; it does not
 claim to review every page or cover every concept. A requested subject filters
-windows by matching terms. Each question generates a small saved summary and one
-question from its window, on demand. Startup needs two model calls (request
-interpretation and the first window), not a full-book scan. Next question needs
-one generation call. No ever-growing book summary is sent back to the model.
+windows by matching terms. Before the first question is displayed, the app prepares
+and saves the question set, including choices, answer keys and source passages.
+Preparation uses sequential, bounded model calls rather than one full-book prompt.
+The Next question button loads the next saved question without a model call;
+answer explanations still use the model. Existing quizzes prepare their remaining
+questions on advancement. No ever-growing book summary is sent back to the model.
 Schema, instructions, references and student text are checked against the input
 budget, preserving the configured reply reserve and safety margin. Each call's
 estimated context and actual usage are shown in token details.
@@ -256,6 +473,11 @@ saved PDFs to make them searchable.
 
 Environment variables: `OLLAMA_URL`, `OLLAMA_MODEL`, `OLLAMA_TIMEOUT`,
 `MAX_HISTORY_MESSAGES`, `CONTEXT_WINDOW`, `RESPONSE_TOKENS`, `EMBEDDING_MODEL`, and `BUDDY_DATA_DIR`.
+`OLLAMA_THINK=true` or `false` explicitly controls thinking for models that support
+that setting; leave it unset to use the model default. Check Ollama's `/api/show`
+thinking metadata before disabling it: thinking-only variants do not support
+`false`. Reasoning consumes output tokens, so these models may need a larger
+`RESPONSE_TOKENS` budget and can be substantially slower in the multi-call workflow.
 
 ## Response Review Loop
 

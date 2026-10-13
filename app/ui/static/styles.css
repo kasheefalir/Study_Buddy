@@ -17,6 +17,13 @@ header { display: flex; justify-content: space-between; align-items: center; gap
 .menu-items button:hover { background: #e8efdf; }
 .model-info { border-top: 1px solid #bdcbc2; margin-top: 54px; padding-top: 18px; }
 .model-info p { font-size: 14px; margin: 9px 0; overflow-wrap: anywhere; }
+.model-info select { width: 100%; min-width: 0; padding: 9px; font: inherit; color: inherit; background: #fff; border: 1px solid #b7c7be; border-radius: 3px; }
+#model-loading { width: min(340px, calc(100% - 32px)); text-align: center; }
+#model-loading h2 { font-size: 20px; margin: 20px 0; overflow-wrap: anywhere; }
+#model-loading progress { width: 100%; height: 6px; accent-color: #416b54; }
+#model-switch-error { color: #a33228; }
+#model-switch-error:empty { display: none; }
+#status { overflow-wrap: anywhere; }
 #model-state { font-size: 11px; color: #667665; }
 #session-list { list-style: none; padding: 0; max-height: 230px; overflow-y: auto; }
 #session-list li { display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #d7dfd0; }
@@ -161,6 +168,9 @@ textarea { resize: vertical; }
 #messages article.failed { border-color: #ae5959; }
 .retry { display: block; margin-top: 8px; padding: 6px; font-size: 11px; }
 .pending .message-body { color: #6c746d; }
+.professor-thinking { display: inline-block; flex: 0 0 64px; width: 64px; height: 32px; background: url('/static/characters/professor.png') 0 0 / 256px 64px no-repeat; image-rendering: pixelated; animation: professor-think 1.8s ease-in-out infinite; }
+@keyframes professor-think { 0%, 100% { transform: rotate(-8deg); } 50% { transform: rotate(8deg) translateY(-2px); } }
+@media (prefers-reduced-motion: reduce) { .professor-thinking { animation: none; } }
 .follow-ups { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .more-actions { position: relative; }
 .more-actions summary { font-size: 20px; }

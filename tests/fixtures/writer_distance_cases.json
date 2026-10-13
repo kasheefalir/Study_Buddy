@@ -1,0 +1,17 @@
+[
+  {
+    "name": "supported_comparison",
+    "question": "According to these passages, how do nearest-point versus average-point distances compare in low and high dimensions?",
+    "expected": "Answer the contrast: nearest points are much closer than average in low dimensions, often not much closer in high dimensions. Do not invent graph values."
+  },
+  {
+    "name": "missing_numeric_result",
+    "question": "What is the exact minimum-to-average distance ratio at dimension 73 in these passages?",
+    "expected": "Abstain: no exact value for dimension 73 is supplied."
+  },
+  {
+    "name": "missing_recommendation",
+    "question": "Which regularization method do these passages recommend to fix the curse of dimensionality, and what parameter value should I use?",
+    "expected": "Abstain: neither a regularization method nor a parameter value is given."
+  }
+]

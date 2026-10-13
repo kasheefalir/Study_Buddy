@@ -1,0 +1,8 @@
+[
+  {"name":"dependence","question":"What information-based distinction does the passage make between dependent and independent events?","expected":"Knowing whether one occurs informs the other for dependence; otherwise independence."},
+  {"name":"coin","question":"For two flips of a fair coin, does knowing the first is Heads tell us whether the second is Heads?","expected":"No additional information; the events are independent."},
+  {"name":"condition","question":"What restriction on the probability of F does the text state before defining the probability of E conditional on F?","expected":"The probability of F must not be zero."},
+  {"name":"independent_update","question":"When E and F are independent, what does knowing F occurred tell us about E?","expected":"No additional information; conditional probability of E equals probability of E."},
+  {"name":"missing_trials","question":"How many experimental coin flips were collected to validate the independence example?","expected":"Absent. The example is not a reported experiment with a sample count."},
+  {"name":"missing_die","question":"What numerical probability do these passages assign to a biased die landing on six?","expected":"Absent. Do not substitute the fair-die probability."}
+]

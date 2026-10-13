@@ -9,6 +9,13 @@ A response is ready when:
   by the student; do not invent ambiguity just because the student omitted a title.
 - Source-attributed claims are supported by the supplied original passages. Earlier
   assistant replies, resource titles, and generated summaries are not proof of contents.
+- When explaining retrieved material, every factual addition and recommendation
+  must be explicitly supported by the evidence, even when not attributed or cited.
+  Reject plausible outside advice and new causal mechanisms. Allow plain-language
+  paraphrases and step-by-step explanations of relationships the text actually states.
+  Check that examples retain the source's assumptions, quantities, and meaning.
+  A figure caption does not
+  establish what an unseen figure shows. Remove unsupported conclusions or advice.
 - General teaching examples are distinguished from what the source says. Ordinary
   conceptual tutoring does not require citations for every general-knowledge statement.
 - It does not claim to have read a resource when no passages were retrieved.

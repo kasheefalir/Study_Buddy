@@ -46,6 +46,19 @@ class OllamaClient:
     async def plan(self, messages: list[dict[str, str]]) -> str:
         return await self.chat(messages, json_mode=True)
 
+    async def preload(self) -> None:
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(f"{self.base_url}/api/chat", json={
+                    "model": self.model, "messages": [], "stream": False,
+                    "keep_alive": "30m", "options": {"num_ctx": settings.context_window},
+                })
+                response.raise_for_status()
+                if response.json().get("done") is not True:
+                    raise OllamaError("Ollama did not confirm that the model finished loading.")
+        except (httpx.HTTPError, ValueError) as exc:
+            raise OllamaError("Could not load the selected model. Check Ollama and try again.") from exc
+
     async def structured_plan(self, messages, schema):
         return await self.chat(messages, json_mode=True, schema=schema)
 
@@ -56,6 +69,12 @@ class OllamaClient:
                    "options": {"num_ctx": settings.context_window, "num_predict": settings.response_tokens, "temperature": 0.2}}
         if json_mode:
             payload["format"] = schema or "json"
+        if self.model.split(":")[0] == "gpt-oss":
+            # GPT-OSS uses named reasoning levels, not an on/off switch.
+            level = settings.ollama_think.lower()
+            payload["think"] = level if level in {"low", "medium", "high"} else "low"
+        elif settings.ollama_think.lower() in {"true", "false"}:
+            payload["think"] = settings.ollama_think.lower() == "true"
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.post(f"{self.base_url}/api/chat", json=payload)

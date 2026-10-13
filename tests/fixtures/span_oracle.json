@@ -1,0 +1,13 @@
+{
+  "source_hash": "bdecaf7fa202fa398430b03666c4d9b1a95285e26fe2eccad8d7854a51e98c16",
+  "chunk_ids": [445, 446, 447],
+  "review": "Manually checked against original local chunks; no textbook text stored here. Comparison retains both sides and exception.",
+  "cases": {
+    "comparison": ["S3:P2", "S3:P4"],
+    "exception": ["S3:P4"],
+    "noise": ["S3:P3"],
+    "sample_count": ["S1:P2"],
+    "missing_number": [],
+    "missing_method": []
+  }
+}

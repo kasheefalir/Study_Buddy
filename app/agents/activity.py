@@ -4,6 +4,16 @@ from contextvars import ContextVar
 
 active = {}
 current = ContextVar("study_activity", default=None)
+quiz_preparation = ContextVar("quiz_preparation", default="")
+
+
+@contextmanager
+def preparing_question(number, total):
+    token = quiz_preparation.set(f"Preparing quiz question {number} of {total}")
+    try:
+        yield
+    finally:
+        quiz_preparation.reset(token)
 
 
 @contextmanager
@@ -26,4 +36,4 @@ def report(stage):
                   "response review": "Checking the explanation against your request and sources",
                   "response revision": "Refining the explanation"}
         labels["retrieval sufficiency"] = "Checking whether the material covers your question"
-        active[identifier] = labels.get(stage, "Preparing your response")
+        active[identifier] = quiz_preparation.get() or labels.get(stage, "Preparing your response")

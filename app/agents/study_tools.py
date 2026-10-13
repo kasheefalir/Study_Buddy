@@ -34,6 +34,16 @@ class IntentRoute(BaseModel):
     reasoning: str = Field(max_length=240)
     query: str = Field(max_length=500)
     pause_activity: bool = False
+    mode: Literal["chat", "summary_material", "summary_conversation", "quiz", "simplify"] = "chat"
+    activity_action: Literal["keep", "pause", "resume", "end", "start", "next", "review"] = "keep"
+
+
+class RetrievalPlan(BaseModel):
+    model_config = {"extra": "forbid"}
+    reasoning: str = Field(max_length=300)
+    query: str = Field(min_length=1, max_length=500)
+    document_ids: list[str]
+    reuse_evidence: bool = False
 
 
 class IntentDecision(BaseModel):
@@ -43,6 +53,7 @@ class IntentDecision(BaseModel):
     query: str = Field(max_length=500)
     document_ids: list[str]
     pause_activity: bool = False
+    reuse_evidence: bool = False
 
 
 class Concept(BaseModel):
@@ -80,6 +91,7 @@ OUTPUTS = {"material tool selection": ToolChoice, "quiz coverage": CoveragePlan,
            "retrieval sufficiency": RetrievalCheck}
 OUTPUTS["intent route"] = IntentRoute
 OUTPUTS["intent decision"] = IntentDecision
+OUTPUTS["retrieval plan"] = RetrievalPlan
 
 
 def library(root, identifiers):

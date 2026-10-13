@@ -28,6 +28,11 @@ class Model:
 
     async def plan(self, messages):
         self.calls.append(messages)
+        instruction = messages[0]["content"]
+        if '"title": "IntentRoute"' in instruction:
+            return json.dumps({"route": "retrieve", "query": "R overview", "reasoning": "Use selected source"})
+        if '"title": "RetrievalPlan"' in instruction:
+            return json.dumps({"query": "R overview", "document_ids": self.ids, "reasoning": "Use selected source"})
         return json.dumps({"tool": "review_materials", "query": "R overview",
                            "document_ids": self.ids, "approach": self.approach,
                            "reasoning": "Use the requested website."})
@@ -144,7 +149,7 @@ def test_source_draft_preserves_intent_without_repeating_old_claims(tmp_path):
     asyncio.run(ChatAgent(model, store).reply("Explain that from the website", cid,
                 materials_root=tmp_path / "documents", document_ids=ids))
     assert "Unsupported claim" in str(model.calls[0])
-    assert "Review indexing" in str(model.calls[0])
+    assert "Review indexing" not in str(model.calls[0])
     assert "Unsupported claim" not in str(model.calls[-1])
     assert "Old unverified claim" not in str(model.calls[-1])
     assert "beginner-friendly" in str(model.calls[-1])
