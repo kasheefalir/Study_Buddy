@@ -117,12 +117,22 @@ python3 -m venv .venv
 The version should be 3.11 or newer. The hidden `.venv` folder keeps Study Buddy's
 packages separate from other Python programs on your computer.
 
-4. Start Study Buddy from the same Terminal window:
+4. Register the `study buddy` command once, from the same Terminal window:
 
 ```bash
-chmod +x start-mac.command
-./start-mac.command
+.venv/bin/python -m app.install_command
 ```
+
+5. Quit Terminal and reopen it, then type this from any folder:
+
+```bash
+study buddy
+```
+
+Registration creates a launcher in your user's `.local/bin` folder and adds
+that folder to your zsh or bash settings. It does not need `sudo` or an
+administrator password. Other Mac shells can still use `bash start-mac.command`
+from the project folder.
 
 ### Windows: First-Time Setup
 
@@ -144,11 +154,45 @@ The version should be 3.11 or newer. If `python` is not recognized but
 The remaining commands use the environment's Python directly; activation is
 not required.
 
-4. Start Study Buddy from the same Command Prompt window:
+4. Register the `study buddy` command once, from the same Command Prompt window:
 
 ```bat
-start-windows.bat
+.venv\Scripts\python.exe -m app.install_command
 ```
+
+5. Close your terminal application completely (including Windows Terminal if
+   you use it), then open a new Command Prompt or PowerShell window and type:
+
+```text
+study buddy
+```
+
+This now works from any folder. Registration puts `study.cmd` in
+`%LOCALAPPDATA%\StudyBuddy\bin` and adds that directory to your user PATH, the
+list of folders Windows searches for commands. It does not need administrator
+access. If a fresh terminal still cannot find it, sign out of Windows and back in.
+
+### Already Have Study Buddy Installed?
+
+After updating your project files to this version, open a terminal in your
+existing project folder. If the app already runs and its `.venv` environment
+is present, you only need to register the command:
+
+On Mac:
+
+```bash
+.venv/bin/python -m app.install_command
+```
+
+On Windows, in Command Prompt:
+
+```bat
+.venv\Scripts\python.exe -m app.install_command
+```
+
+Close and reopen your terminal application, then run `study buddy` from any
+folder. Registration does not change your saved materials or conversations.
+If `.venv` is missing, follow the first-time setup for your operating system.
 
 ### Open the App and Start Studying
 
@@ -170,12 +214,20 @@ more memory and is not intended for an 8 GB computer.
 
 ### Reopen or Stop Study Buddy
 
-After the first setup, you do not need to reinstall the packages or recreate
-`.venv`. Open a terminal in the same project folder using the steps above, then
-run `./start-mac.command` on Mac or `start-windows.bat` in Windows Command Prompt.
-On Windows you can also double-click `start-windows.bat`; use Command Prompt if
-the window closes before you can read an error. Open the same browser address
-after the server starts.
+After the first setup, open a terminal and type `study buddy` from any folder.
+You do not need to activate Python, reinstall packages, or navigate to the
+project folder. Open the same browser address after the server starts.
+
+Keep the project folder in place: the command remembers its location and Python
+environment. If you move or rename the folder, recreate `.venv`, install the
+packages, and repeat command registration from the new location. Do not delete
+the `data` folder, which holds your materials and conversations. Each computer
+needs its own initial setup; downloading a ZIP alone does not install the command.
+
+The original launchers remain available as a fallback: run
+`bash start-mac.command` on Mac or `start-windows.bat` in Windows Command Prompt
+from the project folder. On Windows you can also double-click the batch file;
+use Command Prompt if its window closes before you can read an error.
 
 To stop the app, click its terminal window and press **Ctrl+C** (Control+C on
 Mac, not Command+C). Closing the browser tab does not stop the server. The
@@ -192,6 +244,9 @@ request, and loads again when needed.
 | `requirements.txt` or a start script cannot be found | Your terminal is in the wrong folder. Return to the extracted project folder containing those files using the Mac or Windows steps above. |
 | `Missing app dependencies` or `No module named ...` | From the project folder, rerun `.venv/bin/python -m pip install -r requirements.txt` on Mac, or `.venv\Scripts\python.exe -m pip install -r requirements.txt` on Windows. If `.venv` is missing, first repeat the environment-creation step. |
 | Ollama is missing, not running, or cannot be reached | Install and open the Ollama application, then restart Study Buddy. Installing a Python package called `ollama` is not a substitute. |
+| `study` is not found | Complete command registration, then quit and reopen your terminal application. On Windows, sign out and back in if needed. The original start scripts still work from the project folder. |
+| Registration says another `study` command exists | The installer will not replace another program. Use the original start script, or resolve that command conflict before repeating registration. Existing shell aliases/functions can also take precedence; the installer does not remove them. |
+| `study buddy` cannot find the project or Python | If you moved the project, repeat setup and registration in the new folder. Keep the project and its `.venv` environment together. |
 | The download fails | Check your internet connection and free disk space, then restart the launcher. Model downloads need internet even though later local-file study can work offline. |
 | The browser says it cannot connect | Keep the terminal open and wait for `Uvicorn running`. Use the exact address printed there. If the terminal shows an error, fix that error first. |
 | Mac says `Permission denied` for the start script | From the project folder, run `chmod +x start-mac.command`, then `./start-mac.command`. If macOS shows a security warning instead, verify the download source; do not disable system security protections. |
@@ -201,17 +256,17 @@ request, and loads again when needed.
 the address. If Study Buddy is already running, use its existing browser page.
 Otherwise, choose another port without stopping an unrelated program.
 
-On Mac, from the project folder:
+On Mac, after command registration, from any folder:
 
 ```bash
-BUDDY_PORT=8001 ./start-mac.command
+BUDDY_PORT=8001 study buddy
 ```
 
-On Windows, from Command Prompt in the project folder:
+On Windows, from Command Prompt:
 
 ```bat
 set BUDDY_PORT=8001
-start-windows.bat
+study buddy
 ```
 
 Then open [Study Buddy on port 8001](http://127.0.0.1:8001). Use the same port
@@ -222,13 +277,14 @@ Windows. Remove personal information before sharing logs or screenshots.
 These steps match the launch scripts; they are not a claim that a fresh install
 has been tested on every Mac and Windows configuration.
 
-### Existing Local Mac Shortcut
+### Existing Development Mac Shortcut
 
-This shortcut is specific to the original development Mac, not included as an
-installed command for new users. On that Mac, run `study buddy` from a new
-terminal, or `BUDDY_PORT=8001 study buddy` to use port 8001. It uses the same
-startup and shutdown behavior described above. Python packages and Ollama must
-already be installed.
+The original development Mac already has a shell function named `study`, so
+`study buddy` continues to work there unchanged. The new registration step gives
+other computers the same command without copying that device-specific function.
+Registration does not remove existing aliases or functions. If replacing the old
+shortcut, remove its source line from your shell configuration yourself after
+registering the new command.
 
 ## Technical Reference
 
