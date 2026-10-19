@@ -82,9 +82,9 @@ def test_quiz_coverage_feedback_and_next_step(tmp_path):
 def test_invalid_coverage_and_unready_files_fail_explicitly(tmp_path):
     identifier = "a" * 32
     material(tmp_path, identifier, "Stats")
-    with pytest.raises(ValueError, match="valid study response"):
+    with pytest.raises(ValueError, match="valid multiple-choice question"):
         asyncio.run(quiz_turn(tmp_path, [identifier], "quiz", {}, Model([
-            {"count": 5, "focus": ""}, {"summary": "Fake", "question": "", "expected_answer": "Unknown source explanation"}])))
+            {"count": 5, "focus": ""}] + [{"summary": "Fake", "question": "", "expected_answer": "Unknown source explanation"}] * 3)))
     write_json(tmp_path / (identifier + ".json"), {"id": identifier, "name": "Stats", "status": "Processing"})
     with pytest.raises(ValueError, match="not ready"):
         library(tmp_path, [identifier])

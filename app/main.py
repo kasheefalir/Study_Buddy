@@ -21,17 +21,44 @@ from app.storage.conversation_store import ConversationStore, Message
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
 app = FastAPI(title="Local AI Study Buddy", version="0.1.0")
+
+
+@app.middleware("http")
+async def revalidate_ui_assets(request, call_next):
+    response = await call_next(request)
+    path = request.url.path
+    if path == "/" or (path.startswith("/static/") and path.endswith((".js", ".css", ".html"))):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
 app.include_router(materials_router)
 llm = OllamaClient(settings.ollama_url, settings.ollama_model, settings.request_timeout_seconds)
 store = ConversationStore(settings.conversations_dir, settings.max_history_messages)
 agent = ChatAgent(llm, store)
+
+
+def selected_agent(client, conversations):
+    if client.model == "gpt-oss:20b":
+        from app.agents.gpt.agent import GPTAgent
+        from app.agents.gpt.client import GPTClient
+        return GPTAgent(GPTClient(client.base_url, client.model, client.timeout), conversations)
+    if client.model == "deepseek-r1:8b":
+        from app.agents.deepseek.agent import DeepSeekAgent
+        from app.agents.deepseek.client import DeepSeekClient
+        return DeepSeekAgent(DeepSeekClient(client.base_url, client.model, client.timeout), conversations)
+    return ChatAgent(client, conversations)
+
+
+if llm.model in {"deepseek-r1:8b", "gpt-oss:20b"}:
+    agent = selected_agent(llm, store)
 static_dir = Path(__file__).parent / "ui" / "static"
 tileset_dir = Path(__file__).parents[1] / "2D Pixel Top-Down Japanese School Tileset"
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 app.mount("/tileset", StaticFiles(directory=tileset_dir), name="tileset")
 
 
-ProfessorModel = Literal["llama3.2:3b", "phi4-mini:latest", "gpt-oss:20b"]
+ProfessorModel = Literal["llama3.2:3b", "phi4-mini:latest", "gpt-oss:20b", "gemma4:31b-cloud"]
 model_load_lock = asyncio.Lock()
 
 
@@ -129,7 +156,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
                 status = await client.health()
                 if not status["connected"] or not status["model_available"]:
                     raise HTTPException(503, "Selected model is unavailable. Install it in Ollama or choose another model.")
-                reply_agent = ChatAgent(client, store)
+                reply_agent = selected_agent(client, store)
             conversation_id, reply = await reply_agent.reply(request.message.strip(), active_id, request.document_id, materials.root,
                                                        task=request.task, document_ids=ids,
                                                        quiz_question_id=request.quiz_question_id,

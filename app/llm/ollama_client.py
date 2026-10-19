@@ -5,6 +5,7 @@ from typing import Any
 
 import httpx
 from app.llm.usage import record_usage
+from time import monotonic
 from app.config import settings
 from app.agents.context_budget import estimate, input_limit
 
@@ -63,6 +64,7 @@ class OllamaClient:
         return await self.chat(messages, json_mode=True, schema=schema)
 
     async def chat(self, messages: list[dict[str, str]], *, json_mode: bool = False, schema=None) -> str:
+        started = monotonic()
         if estimate(messages) > input_limit():
             raise OllamaError("This study request exceeds the configured context budget. Use a smaller material batch or increase CONTEXT_WINDOW.")
         payload = {"model": self.model, "messages": messages, "stream": False, "keep_alive": "30m",
@@ -81,7 +83,8 @@ class OllamaClient:
                 response.raise_for_status()
                 data = response.json()
                 record_usage(data, self.model, {"estimated_input_tokens": estimate(messages),
-                    "input_budget": input_limit(), "reply_reserved": settings.response_tokens})
+                    "input_budget": input_limit(), "reply_reserved": settings.response_tokens},
+                    wall_seconds=monotonic() - started)
                 content = data["message"]["content"]
         except httpx.ConnectError as exc:
             raise OllamaError("Ollama is not running. Start Ollama and try again.") from exc
@@ -91,6 +94,8 @@ class OllamaClient:
             logger.exception("Ollama returned an invalid response")
             raise OllamaError("Ollama could not complete the request. Check that the configured model is installed.") from exc
 
+        if data.get("done_reason") == "length":
+            raise OllamaError("The model reached its output limit before finishing. Try a shorter request.")
         if not isinstance(content, str) or not content.strip():
             raise OllamaError("Ollama returned an empty response.")
         return content.strip()

@@ -106,7 +106,8 @@ async def prepare(root, identifier, llm):
                 children = [state["nodes"][i] for i in node["children"]]
                 ids = list(dict.fromkeys(i for child in children for i in child["chunk_ids"]))
                 payload = {"heading": node["heading"], "sections": [
-                    {"summary": child["summary"][:750], "concepts": [c[:120] for c in child["concepts"][:3]]} for child in children]}
+                    {"heading": child["heading"], "summary": child["summary"],
+                     "concepts": child["concepts"]} for child in children]}
             if estimate(structured_messages("material overview", PROMPT, payload)) > input_limit():
                 raise ValueError("A section exceeds the context budget. Increase CONTEXT_WINDOW and resume.")
             with track_usage() as calls:

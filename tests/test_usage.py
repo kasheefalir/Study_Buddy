@@ -27,6 +27,19 @@ def test_missing_counts_are_not_zero():
     assert summarize([])["input_tokens"] is None
 
 
+def test_stage_timings_preserve_missing_values():
+    with track_usage() as calls:
+        with usage_stage("writer"):
+            record_usage({"total_duration": 2_000_000_000, "load_duration": 0,
+                          "eval_duration": -1}, "test", wall_seconds=2.5)
+    assert calls[0]["stage"] == "writer"
+    assert calls[0]["total_seconds"] == 2
+    assert calls[0]["load_seconds"] == 0
+    assert calls[0]["wall_seconds"] == 2.5
+    assert "eval_seconds" not in calls[0]
+    assert "prompt_eval_seconds" not in calls[0]
+
+
 def test_concurrent_requests_are_isolated():
     async def worker(value):
         with track_usage() as calls:

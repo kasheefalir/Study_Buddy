@@ -54,12 +54,28 @@ let conversationId = localStorage.getItem("study-buddy-conversation");
 let busy = false;
 let switchingModel = false;
 let modelStatusVersion = 0;
-const modelLabels = {"llama3.2:3b": "Llama 3.2", "phi4-mini:latest": "Phi-4 Mini", "gpt-oss:20b": "GPT-OSS 20B"};
+const modelLabels = {"llama3.2:3b": "Llama 3.2", "phi4-mini:latest": "Phi-4 Mini", "gpt-oss:20b": "GPT-OSS 20B", "gemma4:31b-cloud": "Gemma 4 31B (cloud)"};
 const modelLabel = (model) => modelLabels[model] || model;
+const modelRamGuidance = {
+  "llama3.2:3b": "8 GB may work; 12+ GB gives more headroom.",
+  "phi4-mini:latest": "8 GB may work; 12–16 GB gives more headroom.",
+  "gpt-oss:20b": "24+ GB recommended for headroom; not an 8 GB option.",
+  "gemma4:31b-cloud": "Runs remotely; no local 31B model RAM requirement. Internet and Ollama cloud access required. Chat history and material excerpts leave this device.",
+};
+function isCloudModel(model) {
+  return /(?:-|:)cloud$/i.test(model || "");
+}
+function updateModelRamGuidance() {
+  $("#model-ram-guidance").textContent = (isCloudModel(professorModel) ? "Cloud: " : "System RAM (estimate): ") + (modelRamGuidance[professorModel] || (isCloudModel(professorModel) ? "Runs remotely through Ollama cloud. Internet and account access required." : "Not yet measured."));
+  $("#privacy-note").textContent = isCloudModel(professorModel)
+    ? "Mind in the clouds: your chat and relevant material excerpts are sent to Ollama cloud."
+    : "Your own quiet corner. Saved on this device.";
+}
 const professorModels = Object.keys(modelLabels);
 let professorModel = localStorage.getItem("buddy-professor-model");
 if (!professorModels.includes(professorModel)) professorModel = professorModels[0];
 $("#professor-model").value = professorModel;
+updateModelRamGuidance();
 $("#professor-model").onchange = async () => {
   if (busy || switchingModel) {$("#professor-model").value = professorModel; return;}
   const selected = $("#professor-model").value;
@@ -86,6 +102,7 @@ $("#professor-model").onchange = async () => {
     $("#model-loading").close();
     switchingModel = false;
     $("#professor-model").disabled = false;
+    updateModelRamGuidance();
     refreshProfessorStatus();
   }
 };
@@ -253,7 +270,10 @@ tiles.src = "/tileset/tilest.png";
 
 function openDialog(id) {
   life.pause();
-  document.querySelectorAll("dialog[open]").forEach((dialog) => dialog.close());
+  document.querySelectorAll("dialog[open]").forEach((dialog) => {
+    // Keep the conversation underneath its materials dialog, including its draft and scroll.
+    if (id !== "materials" || dialog.id !== "chat") dialog.close();
+  });
   $("#" + id).showModal();
   if (id === "materials") loadMaterials();
   if (id === "sessions") loadSessions();
@@ -654,11 +674,15 @@ async function refreshProfessorStatus() {
     const {ollama} = await request("/api/health?model=" + encodeURIComponent(statusModel));
     if (statusModel !== professorModel || switchingModel || version !== modelStatusVersion) return;
     for (const option of $("#professor-model").options) {
-      option.disabled = ollama.connected && !(ollama.models || []).includes(option.value);
+      option.dataset.baseLabel ||= option.textContent;
+      const missing = ollama.connected && !(ollama.models || []).includes(option.value);
+      option.disabled = !ollama.connected || missing;
+      option.textContent = option.dataset.baseLabel + (missing ? " - unavailable in Ollama" : "");
     }
     let state, text, detail;
     if (!ollama.connected) {state = "offline"; text = "Professor is offline"; detail = "Ollama is not reachable";}
     else if (!ollama.model_available) {state = "missing"; text = "Professor needs a model"; detail = "Configured model is not installed";}
+    else if (isCloudModel(statusModel)) {state = "unknown"; text = "Professor's mind is in the clouds"; detail = modelLabel(statusModel) + " · Cloud model registered in Ollama · account access checked when requested";}
     else if (ollama.model_loaded === true) {state = "ready"; text = "● Professor is ready · " + modelLabel(statusModel); detail = "Loaded locally in Ollama";}
     else if (ollama.model_loaded === false) {state = "idle"; text = "Professor is resting"; detail = "Installed · loads when you send a question";}
     else {state = "unknown"; text = "Professor status unconfirmed"; detail = "Installed · loaded state unavailable";}

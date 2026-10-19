@@ -71,6 +71,20 @@ def test_invalid_counts():
             requested_count(text)
 
 
+@pytest.mark.parametrize("message,total", [("Quiz me", 5), ("Ask me 8 questions", 8)])
+def test_default_quiz_count_and_explicit_override(tmp_path, message, total):
+    class DefaultModel(Model):
+        async def structured_plan(self, messages, schema):
+            if schema["title"] == "QuizRequest":
+                assert schema["properties"]["count"]["default"] == 5
+                assert "Default to 5 questions" in messages[0]["content"]
+                return json.dumps({"focus": ""})
+            return await super().structured_plan(messages, schema)
+
+    _, state, _ = asyncio.run(quiz_turn(tmp_path, [], message, {}, DefaultModel()))
+    assert state["total"] == total
+
+
 @pytest.mark.parametrize("message", ["Give me a ten-question quiz", "Ask me seven questions", "I want a quiz with 12 questions"])
 def test_natural_quiz_requests(message):
     assert task_for(message, "auto", {}) == "quiz"

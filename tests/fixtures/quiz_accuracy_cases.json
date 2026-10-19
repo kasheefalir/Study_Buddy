@@ -1,0 +1,26 @@
+[
+  {
+    "id": "outlier_direction",
+    "source": "An extreme observation can substantially change the arithmetic mean. Extreme values generally affect the median less than the mean. The direction of the change depends on whether the added value is above or below the existing mean.",
+    "question": "What can be concluded about adding an extreme observation to a dataset?",
+    "options": ["It always increases the mean.", "It always decreases the mean.", "It can change the mean substantially in either direction.", "It cannot affect the median."],
+    "correct_answer": "It can change the mean substantially in either direction.",
+    "review": "Reject claims that all extremes increase the mean or that the median is immune."
+  },
+  {
+    "id": "test_scaling",
+    "source": "Standardization subtracts the training mean and divides by the training standard deviation. Apply those same training statistics to the test data. Do not fit preprocessing on test data; doing so leaks information from the test set.",
+    "question": "How should a held-out test set be standardized?",
+    "options": ["Use the test set's own mean and standard deviation.", "Use the training set's mean and standard deviation.", "Leave it unscaled even though training data was standardized.", "Fit scaling on combined training and test data."],
+    "correct_answer": "Use the training set's mean and standard deviation.",
+    "review": "Training statistics must be applied to test data; this alone does not guarantee all leakage is prevented."
+  },
+  {
+    "id": "correlation",
+    "source": "Correlation measures the strength and direction of a linear association between two variables. Correlation alone does not establish causation. A correlation near zero does not rule out a nonlinear relationship.",
+    "question": "What does correlation alone establish?",
+    "options": ["A causal relationship.", "The strength and direction of a linear association.", "That confounding is absent.", "That a near-zero value rules out every relationship."],
+    "correct_answer": "The strength and direction of a linear association.",
+    "review": "Reject causal conclusions or treating zero linear correlation as proof of independence."
+  }
+]

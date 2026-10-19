@@ -17,7 +17,7 @@
       <span class="student-label">YOU</span>
     </section>
     <div class="nearby"><button id="nearby-action" hidden></button></div>
-    <footer><span class="online-dot"></span> Your own quiet corner. Saved on this device.</footer>
+    <footer><span class="online-dot"></span> <span id="privacy-note" aria-live="polite">Your own quiet corner. Saved on this device.</span></footer>
   </main>
   <dialog id="model-loading" aria-labelledby="model-loading-title" aria-busy="true">
     <span class="professor-thinking" aria-hidden="true"></span>
@@ -32,7 +32,7 @@
       <button data-open="bookmarks">Saved concepts <span>↗</span></button>
       <button data-open="characters">Choose student <span>↗</span></button>
     </nav>
-    <div class="model-info"><label for="professor-model">Professor chat model</label><p><select id="professor-model"><option value="llama3.2:3b">Llama 3.2 · 3B</option><option value="phi4-mini:latest">Phi-4 Mini · 3.8B</option><option value="gpt-oss:20b">GPT-OSS · 20B (higher memory)</option></select></p><span id="model-state" role="status">Connecting to local Ollama</span><p id="model-switch-error" role="alert"></p></div>
+    <div class="model-info"><label for="professor-model">Professor chat model</label><p><select id="professor-model" aria-describedby="model-ram-guidance model-memory-note"><option value="llama3.2:3b">Llama 3.2 · 3B (~2.0 GB download)</option><option value="phi4-mini:latest">Phi-4 Mini · 3.8B (~2.5 GB download)</option><option value="gpt-oss:20b">GPT-OSS · 20B (~13 GB download)</option><option value="gemma4:31b-cloud">Gemma 4 · 31B (cloud · internet required)</option></select></p><p id="model-ram-guidance" role="status"></p><p id="model-memory-note">Local download sizes are for quantized models, not runtime RAM. RAM guidance is an unverified whole-computer estimate. Context length, other models, and other apps affect usage; 8 GB performance is not yet validated. Cloud model processing happens off this device.</p><span id="model-state" role="status">Connecting to local Ollama</span><p id="model-switch-error" role="alert"></p></div>
   </dialog>
   <dialog id="sessions" aria-labelledby="sessions-heading">
     <div class="dialog-heading"><div><small>QUESTIONS, CONVERSATIONS & MEMORY</small><h2 id="sessions-heading">Study sessions</h2></div><button class="icon close" aria-label="Close study sessions">×</button></div>
@@ -107,5 +107,5 @@
   <script src="/static/vendor/marked.js"></script>
   <script src="/static/vendor/purify.min.js"></script>
   <script src="/static/chat-tools.js?v=quiz-next-30"></script>
-  <script src="/static/app.js?v=gpt-oss-32"></script>
+  <script src="/static/app.js?v=cloud-status-36"></script>
 </body></html>

@@ -46,6 +46,19 @@ def test_oversized_current_question_is_not_silently_truncated():
         budget.pack("Professor", "word " * 50_000, [], {}, [], 16)
 
 
+def test_model_budget_matches_gpt_client_and_restores_defaults():
+    normal = budget.input_limit()
+    with budget.model_budget("gpt-oss:20b"):
+        _, _, report = budget.pack("Professor", "Explain", [], {}, [], 16)
+        assert report["reply_reserved"] == 4096
+        assert report["input_budget"] == budget.input_limit("gpt-oss:20b")
+        assert report["input_budget"] + 4096 + 512 == budget.settings.context_window
+        with budget.model_budget("phi4-mini:latest"):
+            assert budget.input_limit() == normal
+        assert budget.reply_reserve() == 4096
+    assert budget.input_limit() == normal
+
+
 def test_invalid_summary_keeps_previous_memory_and_all_messages(tmp_path):
     class Model:
         async def structured_plan(self, messages, schema):
@@ -63,3 +76,24 @@ def test_invalid_summary_keeps_previous_memory_and_all_messages(tmp_path):
     asyncio.run(ChatAgent(Model(), store).reply("Continue", identifier))
     assert store.summary(identifier) == saved
     assert len(store.load(identifier)) == 42
+
+
+def test_evidence_uses_spare_capacity_and_balances_documents(monkeypatch):
+    monkeypatch.setattr(budget, "settings", replace(budget.settings, context_window=4096, response_tokens=512))
+    sources = [{"document_id": doc, "label": f"{doc}{i}", "text": "evidence " * 160}
+               for doc in ("A", "B") for i in range(5)]
+    with budget.model_budget("gemma4:31b-cloud"):
+        messages, included, report = budget.pack("Professor", "Compare A and B", [], {}, sources, 16)
+    assert {s["document_id"] for s in included} == {"A", "B"}
+    assert [s["document_id"] for s in included[:2]] == ["A", "B"]
+    old_budget = int((budget.input_limit() - budget.estimate([
+        {"role": "system", "content": "Professor"}, {"role": "user", "content": "Compare A and B"}])) * .4) - 250
+    assert budget.estimate([budget.data_message("Reviewed session materials", included)]) > old_budget
+    assert budget.estimate(messages) <= report["input_budget"]
+    assert sources[0]["text"] == "evidence " * 160
+    for model in ("llama3.2:3b", "phi4-mini:latest"):
+        with budget.model_budget(model):
+            _, small_sources, small_report = budget.pack("Professor", "Compare A and B", [], {}, sources, 16)
+        assert small_report["source_budget"] == old_budget
+        assert small_report["evidence_policy"] == "compact"
+        assert len(small_sources) < len(included)

@@ -1,0 +1,32 @@
+[
+  {
+    "id": "sql_aggregate",
+    "source": "SQL MAX returns the largest value in a group. MIN returns the smallest value, SUM adds values, and COUNT counts rows or non-null values depending on its argument.",
+    "question": "Which aggregate returns the largest value in a group?",
+    "answer": "The MAX aggregate returns the largest value in a group.",
+    "wrong": "The MIN aggregate returns the largest value in a group.",
+    "others": ["The SUM aggregate returns the largest value in a group.", "The COUNT aggregate returns the largest value in a group."],
+    "equivalent": "Use MAX to find the group's largest value.",
+    "missing_source": "SQL groups rows for aggregate calculations. This excerpt does not define any aggregate functions."
+  },
+  {
+    "id": "data_structure",
+    "source": "A stack stores elements in last-in-first-out order. A queue removes elements in first-in-first-out order. A set represents distinct elements; a map associates keys with values.",
+    "question": "Which structure stores elements in last-in-first-out order?",
+    "answer": "The stack structure stores elements in last-in-first-out order.",
+    "wrong": "The queue structure stores elements in last-in-first-out order.",
+    "others": ["The set structure stores elements in last-in-first-out order.", "The map structure stores elements in last-in-first-out order."],
+    "equivalent": "A stack removes the most recently added element first.",
+    "missing_source": "Data structures organize elements for storage and access. This excerpt does not describe their ordering rules."
+  },
+  {
+    "id": "http_status",
+    "source": "HTTP status 404 indicates that the requested resource was not found. Status 200 indicates success, 403 indicates refusal to fulfill the request, and 500 indicates an unexpected server condition preventing completion.",
+    "question": "Which status indicates that the requested resource was not found?",
+    "answer": "Status 404 indicates that the requested resource was not found.",
+    "wrong": "Status 200 indicates that the requested resource was not found.",
+    "others": ["Status 403 indicates that the requested resource was not found.", "Status 500 indicates that the requested resource was not found."],
+    "equivalent": "A missing requested resource is indicated by status 404.",
+    "missing_source": "HTTP responses include status codes. This excerpt does not explain the meaning of any particular code."
+  }
+]

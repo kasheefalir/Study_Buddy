@@ -67,7 +67,7 @@ def reusable_evidence(root, identifiers, history):
     return [dict(s) for s in sources]
 
 
-def document_view(root, item, chunks, budget):
+def document_view(root, item, chunks, budget, *, outline_details=False):
     from app.agents.study_tools import passages, coherent_passages
     from app.rag.overview import cached
     primary = [c for c in chunks if c.get("variant") == "clean"] or chunks
@@ -87,6 +87,16 @@ def document_view(root, item, chunks, budget):
                     "text": node["summary"] + "\nMain ideas: " + "; ".join(node.get("concepts", [])),
                     "variant": "generated_summary", "covered_chunk_ids": node["chunk_ids"],
                     "page": first.get("page"), "label": "Overview"}
+        if outline_details:
+            from app.rag.outline import spread
+            chapters = [nodes[key] for key in cache.get("chapter_roots", []) if key in nodes and nodes[key] != top]
+            for count in range(min(12, len(chapters)), 0, -1):
+                selected = [chapters[i] for i in spread(len(chapters), count)]
+                result = [source(top)] + [source(n) for n in selected]
+                result[0]["text"] += (f"\nCoverage note: the book overview is compressed; detailed notes "
+                    f"for {count} of {len(chapters)} extracted sections follow. Other details are omitted.")
+                if cost(result) <= budget:
+                    return result, "outline_details"
         # Expand the complete tree frontier only when ALL children fit. Never sample
         # chapters and mistake their summaries for a complete document overview.
         frontier = [top]

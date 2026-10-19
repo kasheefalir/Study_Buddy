@@ -80,7 +80,7 @@ def test_packed_limits_and_no_stale_coverage_at_4096(monkeypatch):
 
 
 def test_public_choices_hide_key_until_graded():
-    assert QuizRequest().count == 10
+    assert QuizRequest().count == 5
     assert QuizRequest().format == "multiple_choice"
     q = {"question_id": "q1", "pending_question": "Which?", "options": ["A", "B", "C", "D"],
          "answer_key": "C", "correct_index": 2, "cursor": 0, "total": 5, "results": []}

@@ -95,15 +95,17 @@ def test_switch_models_keeps_history_and_shared_client(tmp_path, monkeypatch):
 
     monkeypatch.setattr(main.OllamaClient, "health", health)
     monkeypatch.setattr(main.ChatAgent, "reply", reply)
+    from app.agents.deepseek.agent import DeepSeekAgent
+    monkeypatch.setattr(DeepSeekAgent, "reply", reply)
     client = TestClient(main.app)
     cid = client.post("/api/conversations", json={}).json()["conversation_id"]
-    for model in ("phi4-mini:latest", "llama3.2:3b", "gpt-oss:20b"):
+    for model in ("phi4-mini:latest", "llama3.2:3b", "gpt-oss:20b", "gemma4:31b-cloud"):
         result = client.post("/api/chat", json={"message": "Hello", "conversation_id": cid, "model": model})
         assert result.status_code == 200
         assert result.json()["message"] == model
         assert client.get("/api/health", params={"model": model}).json()["ollama"]["model"] == model
-    assert seen == ["phi4-mini:latest", "llama3.2:3b", "gpt-oss:20b"]
-    assert len(store.load(cid)) == 6
+    assert seen == ["phi4-mini:latest", "llama3.2:3b", "gpt-oss:20b", "gemma4:31b-cloud"]
+    assert len(store.load(cid)) == 8
     assert main.llm.model == original
 
 
@@ -138,3 +140,30 @@ def test_omitted_model_uses_existing_agent(tmp_path, monkeypatch):
     result = TestClient(main.app).post("/api/chat", json={"message": "Hello"})
     assert result.status_code == 200
     assert result.json()["message"] == "default"
+
+
+def test_removed_model_is_not_selectable():
+    client = TestClient(main.app)
+    assert client.post("/api/models/load", json={"model": "deepseek-r1:8b"}).status_code == 422
+
+
+def test_ui_assets_revalidate_after_updates():
+    client = TestClient(main.app)
+    for path in ("/", "/static/app.js?v=cloud-status-36"):
+        response = client.get(path)
+        assert response.status_code == 200
+        assert response.headers["cache-control"] == "no-cache"
+    assert "app.js?v=cloud-status-36" in client.get("/").text
+
+
+def test_cloud_can_be_loaded_without_sending_conversation(monkeypatch):
+    async def health(self):
+        return {"connected": True, "model_available": True}
+
+    async def preload(self):
+        assert self.model == "gemma4:31b-cloud"
+
+    monkeypatch.setattr(main.OllamaClient, "health", health)
+    monkeypatch.setattr(main.OllamaClient, "preload", preload)
+    result = TestClient(main.app).post("/api/models/load", json={"model": "gemma4:31b-cloud"})
+    assert result.status_code == 200

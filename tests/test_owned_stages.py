@@ -51,7 +51,7 @@ def test_pause_greeting_resume_preserves_question_and_results(tmp_path):
         assert store.quiz(cid)["paused"] and not store.quiz(cid)["active"]
         assert store.quiz(cid)["results"] == quiz["results"]
     _, reply = asyncio.run(agent.reply("Back to where we left off", cid, materials_root=tmp_path, document_ids=[]))
-    assert reply == "What is R?"
+    assert reply == "**Question 2 of 10**\n\nWhat is R?"
     assert store.quiz(cid)["active"] and not store.quiz(cid)["paused"]
     assert store.quiz(cid)["cursor"] == 1
     assert store.quiz(cid)["results"] == quiz["results"]

@@ -10,12 +10,12 @@ from pydantic import BaseModel, Field
 
 from app.agents.context_budget import estimate, input_limit
 from app.agents.activity import preparing_question
-from app.agents.study_tools import OUTPUTS, library, passages, structured, structured_messages
+from app.agents.study_tools import OUTPUTS, library, passages, structured, structured_messages, StudyResponseError
 from app.rag.library import candidates
 
 
 class QuizRequest(BaseModel):
-    count: int = Field(default=10, ge=1, le=50)
+    count: int = Field(default=5, ge=1, le=50)
     focus: str = Field(default="", max_length=200)
     format: Literal["short_answer", "multiple_choice"] = "multiple_choice"
     guidelines: str = Field(default="", max_length=300)
@@ -141,9 +141,24 @@ def windows(books, focus=""):
     terms = set(re.findall(r"\w{4,}", focus.lower()))
     for item, chunks in books:
         primary = [c for c in chunks if c.get("variant") == "clean"] or chunks
+        # Explicit chapter boundaries are stronger scope evidence than incidental
+        # mentions of a topic elsewhere in a textbook. Never infer absent boundaries.
+        boundaries = []
+        for index, chunk in enumerate(primary):
+            match = re.match(r"^\s*CHAPTER\s+\d+\s*\n([^\n]+)", chunk["text"], re.I)
+            if match:
+                boundaries.append((index, set(re.findall(r"\w{4,}", match[1].lower()))))
+        scoped = []
+        if terms:
+            for position, (start, title_terms) in enumerate(boundaries):
+                if terms <= title_terms:
+                    end = boundaries[position + 1][0] if position + 1 < len(boundaries) else len(primary)
+                    scoped.extend(primary[start:end])
+        if scoped:
+            primary = scoped
         # Exclude clearly labelled publishing matter, not arbitrary first/last pages.
         useful = [c for c in primary if not re.search(
-            r"copyright|table of contents|colophon|about the author|^index$", c.get("chapter", ""), re.I)]
+            r"copyright|table of contents|colophon|about the author|^index$|^for further (?:investigation|exploration|reading)$", c.get("chapter", ""), re.I)]
         primary = useful or primary
         for start in range(0, len(primary), 2):
             group = primary[start:start + 3]
@@ -187,8 +202,11 @@ def coverage_windows(root, books, focus=""):
         item, chunks = next((book for book in books if book[0]["id"] == concept_window["document_id"]), (None, []))
         if not item:
             continue
-        hits = {chunk["id"] for chunk in candidates(chunks, concept_window.get("concept", ""), limit=3)}
+        linked = set(concept_window.get("chunk_ids", []))
+        linked_chunks = [chunk for chunk in chunks if chunk["id"] in linked]
+        hits = {chunk["id"] for chunk in candidates(linked_chunks, concept_window.get("concept", ""), limit=3)}
         choices = [window for window in source_windows if window["document_id"] == item["id"]]
+        choices = [window for window in choices if hits & set(window["chunk_ids"])]
         if choices:
             closest = max(choices, key=lambda window: len(hits & set(window["chunk_ids"])))
             projected.append({**closest, "concept": concept_window.get("concept", "")})
@@ -285,7 +303,7 @@ def answer_index(quiz):
     return index
 
 
-def choice_question_problem(data):
+def choice_question_problem(data, *, model=None, source_backed=False):
     """Return a repair note when a generated choice question cannot be graded safely."""
     options = data.get("options", [])
     normalized = [re.sub(r"\s+", " ", option).strip().casefold() for option in options]
@@ -300,13 +318,21 @@ def choice_question_problem(data):
     stem_terms = set(re.findall(r"\w{3,}", data.get("question", "").casefold()))
     answer_terms = set(re.findall(r"\w{3,}", answer))
     if len(answer_terms) >= 4 and len(answer_terms - stem_terms) <= 1:
+        if model == "gpt-oss:20b" and source_backed:
+            from app.agents.gpt.quiz_policy import distinguishing_answer
+            if distinguishing_answer(data):
+                return ""
         return "The correct option mostly repeats the wording of the question instead of supplying its answer."
     return ""
 
 
 async def choice_quality_problem(llm, data, sources):
     """Ask the tutor for a semantic check that deterministic schema checks cannot provide."""
-    review, _ = await bounded(llm, "choice quality", CHOICE_QUALITY_PROMPT,
+    prompt = CHOICE_QUALITY_PROMPT
+    if getattr(llm, "model", None) == "gpt-oss:20b" and sources:
+        from app.agents.gpt.quiz_policy import QUALITY_PROMPT
+        prompt = QUALITY_PROMPT
+    review, _ = await bounded(llm, "choice quality", prompt,
                               {"question": data["question"], "options": data["options"],
                                "correct_answer": data["correct_answer"],
                                "expected_answer": data["expected_answer"]}, sources)
@@ -338,6 +364,9 @@ def repeated_question_problem(question, previous_questions):
 
 def choice_feedback_problem(data):
     feedback = " ".join(data.get(field, "") for field in ("explanation", "correction", "example"))
+    # Code examples and literal help operators are not conversational questions.
+    feedback = re.sub(r"```[\s\S]*?```|`[^`\n]*`", "", feedback)
+    feedback = re.sub(r"['\"]\?['\"]|\?(?=[A-Za-z_]\w*)|\?(?=\s+(?:operator|symbol)\b)", "", feedback)
     if "?" in feedback:
         return "This is answer feedback, not the next quiz turn. Do not ask any question."
     return ""
@@ -352,8 +381,10 @@ def question_text(quiz):
     return f'**Question {quiz["cursor"] + 1} of {quiz["total"]}**\n\n{quiz["pending_question"]}{options}'
 
 
-async def quiz_turn(root, identifiers, message, quiz, llm, recent=None, activity_action=None):
+async def quiz_turn(root, identifiers, message, quiz, llm, recent=None, activity_action=None, *, prepare_all=True):
     response, state, sources = await _quiz_turn(root, identifiers, message, quiz, llm, recent, activity_action)
+    if not prepare_all:
+        return response, state, sources
     if (response is None or state.get("phase") != "question" or not state.get("pending_question")
             or state.get("question_id") == quiz.get("question_id")):
         return response, state, sources
@@ -393,7 +424,7 @@ async def _quiz_turn(root, identifiers, message, quiz, llm, recent=None, activit
         return "You've already answered this question. Choose Next question to advance, or ask about the explanation.", quiz, quiz.get("sources", [])
     if activity_action == "resume" and quiz.get("pending_question"):
         # Resuming is not an answer submission or permission to advance.
-        return quiz["pending_question"], quiz, quiz.get("sources", [])
+        return question_text(quiz), quiz, quiz.get("sources", [])
     if activity_action == "next":
         message = "Next question"
     choice_answer = selected_option(message, quiz)
@@ -446,7 +477,7 @@ async def _quiz_turn(root, identifiers, message, quiz, llm, recent=None, activit
     if quiz.get("version") != 2 or quiz.get("document_ids") != identifiers:
         count = requested_count(message)
         intent, _ = await bounded(llm, "quiz request",
-            "Interpret the student's quiz request. Default to 10 questions unless they specify a total. "
+            "Interpret the student's quiz request. Default to 5 questions unless they specify a total. "
             "Default to multiple_choice unless the learner requests another format. "
             "'One question at a time' describes pacing, NOT total count. Return a short subject focus "
             "only if explicitly requested; use an empty focus for the whole material or main ideas. "
@@ -508,19 +539,35 @@ async def _quiz_turn(root, identifiers, message, quiz, llm, recent=None, activit
                 prompt + "\n\nYour previous draft could not be used: " + repair
                 + " Regenerate the whole question with four new, distinct choices."
             )
-            with preparing_question(cursor + 1, quiz["total"]):
-                data, sources = await bounded(llm, "quiz choices" if choice else "quiz window", attempt_prompt,
-                                               request, sources)
-            repair = choice_question_problem(data) if choice else ""
+            try:
+                with preparing_question(cursor + 1, quiz["total"]):
+                    data, sources = await bounded(llm, "quiz choices" if choice else "quiz window", attempt_prompt,
+                                                   request, sources)
+            except StudyResponseError:
+                repair = "Return one valid JSON object with actual question and answer values, not a schema or commentary. Follow every required field and length constraint."
+                continue
+            repair = choice_question_problem(data, model=getattr(llm, "model", None),
+                                             source_backed=bool(sources)) if choice else ""
             if not repair:
                 repair = repeated_question_problem(data["question"], previous_questions)
             if not repair and choice:
                 with preparing_question(cursor + 1, quiz["total"]):
-                    repair = await choice_quality_problem(llm, data, sources)
+                    try:
+                        repair = await choice_quality_problem(llm, data, sources)
+                    except StudyResponseError:
+                        repair = "The answer-choice review was malformed. Regenerate a clear question with exactly one correct answer."
+            if repair and attempt == 0 and books:
+                # Repeating the same draft against an insufficient window cannot
+                # repair evidence. Allow one focused read within this material.
+                from app.rag.semantic import retrieve
+                recovered = await retrieve(root, item, chunks,
+                    (quiz.get("focus", "") + " " + data["question"])[:1000], 3)
+                if recovered:
+                    sources = passages(item, recovered)
             if not repair:
                 break
         if repair:
-            raise ValueError("Professor could not form a valid multiple-choice question after retrying. Please try another topic.")
+            raise ValueError(f"Professor could not form a valid multiple-choice question {cursor + 1} of {quiz['total']} after retrying. Quiz progress was not saved. Try a shorter quiz or switch models.")
         # Reference links come from the exact bounded input, never model-authored IDs.
         quiz.update(pending_question=data["question"], expected_answer=data["expected_answer"], sources=sources,
                     question_id=uuid4().hex)
@@ -536,6 +583,7 @@ async def _quiz_turn(root, identifiers, message, quiz, llm, recent=None, activit
     if NEXT.fullmatch(message):
         return "Answer the current question first, or ask for a hint.\n\n" + quiz["pending_question"], quiz, quiz["sources"]
     hint = quiz.pop("hint_requested", False) or bool(re.search(r"\bhint\b", message, re.I))
+    feedback_fallback = False
     if choice_answer is not None and not hint:
         options = quiz["options"]
         correct_index = answer_index(quiz)
@@ -558,12 +606,20 @@ async def _quiz_turn(root, identifiers, message, quiz, llm, recent=None, activit
         repair = ""
         for attempt in range(2):
             attempt_prompt = feedback_prompt if not repair else feedback_prompt + "\n\nYour previous draft broke the feedback contract: " + repair + " Rewrite it as an explanation only."
-            data, _ = await bounded(llm, "choice feedback", attempt_prompt, feedback_request, quiz["sources"])
+            try:
+                data, _ = await bounded(llm, "choice feedback", attempt_prompt, feedback_request, quiz["sources"])
+            except StudyResponseError:
+                repair = "Return one JSON object with explanation, correction, and example strings, not a schema or commentary."
+                continue
             repair = choice_feedback_problem(data)
+            if not repair and verdict == "incorrect" and not all(data[k].strip() for k in ("correction", "example")):
+                repair = "Include the correction and example fields for an incorrect answer."
             if not repair:
                 break
         if repair:
-            raise ValueError("Professor could not finish this answer review without starting a new question. Please try the answer again.")
+            feedback_fallback = True
+            data = {"explanation": f"The saved answer key is {chr(65 + correct_index)}: {options[correct_index]}\n\nYour answer was recorded. A detailed explanation could not be prepared; you can ask about this question separately.",
+                    "correction": "", "example": ""}
     else:
         data, _ = await bounded(llm, "quiz assessment", GRADE_PROMPT,
         {"question": quiz["pending_question"], "expected_answer": quiz["expected_answer"],
@@ -571,7 +627,7 @@ async def _quiz_turn(root, identifiers, message, quiz, llm, recent=None, activit
          "correct_option": quiz.get("correct_index"), "selected_option": choice_answer,
          "selection_is_correct": choice_answer == quiz.get("correct_index") if choice_answer is not None else None}, quiz["sources"])
         verdict = "hint" if hint else data["verdict"]
-    if verdict == "incorrect" and not all(data[k].strip() for k in ("correction", "example")):
+    if verdict == "incorrect" and not feedback_fallback and not all(data[k].strip() for k in ("correction", "example")):
         raise ValueError("Professor could not complete the concept review. Please retry your answer.")
     heading = {"correct": "Correct", "incorrect": "Incorrect", "hint": "Hint", "uncertain": "Please clarify"}[verdict]
     review = "\n\n".join(data[k].strip() for k in ("explanation", "correction", "example") if data[k].strip()) if verdict == "incorrect" else data["explanation"]
@@ -581,6 +637,7 @@ async def _quiz_turn(root, identifiers, message, quiz, llm, recent=None, activit
         quiz["results"].append({"number": cursor + 1, "question": quiz["pending_question"],
                                 "question_id": quiz.get("question_id", ""),
                                 "student_answer": message, "verdict": verdict, "review": review,
+                                "feedback_status": "unavailable" if feedback_fallback else "generated",
                                 "options": quiz.get("options", []),
                                 "selected_index": choice_answer, "correct_index": quiz.get("correct_index"),
                                 "sources": quiz["sources"]})
@@ -592,7 +649,7 @@ async def _quiz_turn(root, identifiers, message, quiz, llm, recent=None, activit
 
 def public_question(quiz):
     """Never expose a pending answer key through chat or conversation APIs."""
-    if not quiz.get("options") or not quiz.get("question_id"):
+    if quiz.get("ended") or not quiz.get("options") or not quiz.get("question_id"):
         return {}
     result = next((r for r in reversed(quiz.get("results", []))
                    if r.get("question_id") == quiz["question_id"]), None)

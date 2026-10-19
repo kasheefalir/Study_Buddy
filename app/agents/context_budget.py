@@ -2,9 +2,27 @@
 import json
 import math
 import re
+from collections import OrderedDict
+from contextlib import contextmanager
+from contextvars import ContextVar
 
 from app.config import settings
 from app.llm.usage import usage_stage
+
+_model = ContextVar("context_budget_model", default=None)
+
+
+@contextmanager
+def model_budget(model):
+    token = _model.set(model)
+    try:
+        yield
+    finally:
+        _model.reset(token)
+
+
+def reply_reserve(model=None):
+    return 4096 if (model or _model.get()) == "gpt-oss:20b" else settings.response_tokens
 
 
 def text_tokens(text):
@@ -16,9 +34,10 @@ def estimate(messages):
     return 8 + sum(12 + text_tokens(m["content"]) for m in messages)
 
 
-def input_limit():
-    available = settings.context_window - settings.response_tokens - 512
-    if settings.response_tokens < 128 or available < 1024:
+def input_limit(model=None):
+    reserve = reply_reserve(model)
+    available = settings.context_window - reserve - 512
+    if reserve < 128 or available < 1024:
         raise ValueError("CONTEXT_WINDOW must leave at least 1,024 input tokens after the reply reserve and 512-token margin.")
     return available
 
@@ -74,9 +93,24 @@ def pack(prompt, question, history, context, sources, max_messages):
             context.pop(next(iter(context)))
     session_note = [data_message("Current study session (orientation, not source evidence)", study_session)] if study_session else []
     notes = [data_message("Conversation context", context)] if context else []
-    source_budget = max(0, int(remaining * .40) - 250)
-    included = []
+    # Reserve recent dialogue for follow-ups, then give evidence the spare capacity.
+    history_reserve = min(int(remaining * .20), sum(
+        12 + text_tokens(m["content"]) for m in history[-max_messages:])) if max_messages else 0
+    model = _model.get() or ""
+    expanded_evidence = model == "gpt-oss:20b" or model.endswith(("-cloud", ":cloud"))
+    source_budget = (max(0, limit - estimate([system, *session_note, *notes, current]) - history_reserve - 250)
+                     if expanded_evidence else max(0, int(remaining * .40) - 250))
+    groups = OrderedDict()
     for source in sources:
+        key = (source.get("document_id", ""), source.get("chapter") or source.get("heading") or "")
+        groups.setdefault(key, []).append(source)
+    # Round-robin preserves different documents/sections before filling neighbors.
+    ordered = [group[i] for i in range(max(map(len, groups.values()), default=0))
+               for group in groups.values() if i < len(group)]
+    if not expanded_evidence:
+        ordered = sources
+    included = []
+    for source in ordered:
         if estimate([data_message("Reviewed session materials", included + [source])]) <= source_budget:
             included.append(source)
     # A small context still gets an explicitly marked excerpt from the best source.
@@ -107,8 +141,10 @@ def pack(prompt, question, history, context, sources, max_messages):
     # Put newly retrieved evidence after old dialogue to reduce anchoring on stale answers.
     messages = [system, *session_note, *notes, *recent, *references, current]
     return messages, included, {"estimated_input_tokens": estimate(messages), "input_budget": limit,
-        "context_window": settings.context_window, "reply_reserved": settings.response_tokens,
+        "context_window": settings.context_window, "reply_reserved": reply_reserve(),
         "safety_margin": 512, "material_passages": len(included), "recent_messages": len(recent),
+        "source_budget": source_budget, "source_groups": len(groups),
+        "evidence_policy": "balanced_spare_capacity" if expanded_evidence else "compact",
         "history_start": start, "estimate_only": True}
 
 

@@ -14,6 +14,7 @@ data/conversations/*
 data/documents/*
 data/indexes/*
 data/study-reviews/*
+data/evaluations/*
 !data/**/.gitkeep
 
 # This optional sourced helper contains a machine-specific project path.

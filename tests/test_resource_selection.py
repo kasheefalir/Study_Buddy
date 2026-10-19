@@ -42,6 +42,24 @@ class Model:
         return "This is a model-written explanation."
 
 
+def test_outline_navigation_is_scoped_to_tested_large_models(tmp_path):
+    ids = resources(tmp_path)[:1]
+    write_json(tmp_path / ids[0] / "chunks.json", [
+        {"id": i, "chapter": "Logistic Regression" if i == 19 else f"Chapter {i}",
+         "text": "Source passage", "location": f"Page {i}"} for i in range(20)])
+    for name in ("gpt-oss:20b", "gemma4:31b-cloud", "llama3.2:3b", "phi4-mini:latest"):
+        model = Model(ids)
+        model.model = name
+        asyncio.run(review_materials(tmp_path, ids, "Explain logistic regression", [], model))
+        card = json.loads(model.calls[0][-1]["content"])["session_materials"][0]
+        if name in {"gpt-oss:20b", "gemma4:31b-cloud"}:
+            assert card["sections"] == ["Logistic Regression"]
+            assert card["source_outline"]["total_sections"] == 20
+        else:
+            assert "source_outline" not in card
+            assert card["sections"] == [f"Chapter {i}" for i in range(8)]
+
+
 def test_model_selects_website_before_retrieval(tmp_path):
     ids = resources(tmp_path)
     model, context = Model(ids[:1]), {}
@@ -163,3 +181,71 @@ def test_coherent_retrieval_keeps_neighbors_and_citations():
     assert [c["id"] for c in coherent_passages(chunks, 4, [chunks[2]])] == [1, 2, 3]
     assert [c["id"] for c in coherent_passages(chunks, 4)] == [0, 1, 4, 5]
     assert coherent_passages([], 12) == []
+
+
+def test_neighbors_cannot_displace_primary_hits():
+    chunks = [{"id": i, "text": str(i), "location": str(i // 3)} for i in range(9)]
+    hits = [chunks[1], chunks[4], chunks[7]]
+    result = coherent_passages(chunks, 4, hits)
+    assert {1, 4, 7} <= {c["id"] for c in result}
+    assert len(result) == 4
+    assert [c["id"] for c in coherent_passages(chunks, 2, hits)] == [1, 4]
+    assert coherent_passages(chunks, 0, hits) == []
+    assert len(coherent_passages(chunks, 3, [chunks[1], chunks[1]])) == 3
+
+
+def test_large_summary_uses_cached_hierarchy_not_vector_search(tmp_path, monkeypatch):
+    ids = resources(tmp_path)[:1]
+    chunks = [{"id": i, "text": ("Section %s. " % i) * 300,
+               "location": "Page " + str(i + 1)} for i in range(30)]
+    write_json(tmp_path / ids[0] / "chunks.json", chunks)
+    write_json(tmp_path / ids[0] / "overview.json", {
+        "status": "ready", "fingerprint": fingerprint(chunks), "root": "book",
+        "nodes": {"book": {"heading": "Book overview", "summary": "An overview of all sections.",
+                             "concepts": ["Reproducibility"], "chunk_ids": list(range(30))}}})
+
+    async def forbidden(*args, **kwargs):
+        raise AssertionError("Whole-material summaries must not run top-k retrieval")
+
+    monkeypatch.setattr(study_tools, "retrieve", forbidden)
+
+    class SearchPlanner(Model):
+        async def structured_plan(self, messages, schema):
+            self.calls.append(messages)
+            assert len(self.calls) == 1, "No redundant sufficiency call for a summary view"
+            return json.dumps({"tool": "search_materials", "query": "main ideas",
+                               "document_ids": ids, "approach": "source_focused",
+                               "reasoning": "Summarize the material."})
+
+    model, context = SearchPlanner(ids), {}
+    sources = asyncio.run(review_materials(tmp_path, ids, "Summarize this material", [], model,
+                                          overview=True, review_context=context))
+    assert sources[0]["variant"] == "generated_summary"
+    assert context["coverage"][0]["complete"] is True
+    assert context["coverage"][0]["represented_passages"] == 30
+    assert len(model.calls) == 1
+
+
+def test_large_uncached_view_never_claims_complete_coverage(tmp_path):
+    from app.agents.retrieval_context import document_view, coverage_report
+    item = {"id": "a" * 32, "name": "Large book"}
+    chunks = [{"id": i, "text": "Study material. " * 80, "location": str(i)} for i in range(50)]
+    sources, strategy = document_view(tmp_path, item, chunks, 800)
+    assert strategy == "partial_text"
+    assert not coverage_report([(item, chunks)], sources)[0]["complete"]
+
+
+def test_optional_sufficiency_format_error_keeps_retrieved_passages(tmp_path):
+    ids = resources(tmp_path)[:1]
+    class BadCheck(Model):
+        async def structured_plan(self, messages, schema):
+            if schema["title"] == "RetrievalCheck":
+                assert "Keep gap under 200 characters" in messages[0]["content"]
+                assert "do not require an entire chapter" in messages[0]["content"]
+                return "not JSON"
+            return await self.plan(messages)
+    context = {}
+    sources = asyncio.run(review_materials(tmp_path, ids, "Explain scripts", [], BadCheck(ids),
+                                          review_context=context))
+    assert sources
+    assert "retained initial evidence" in context["retrieval_check_error"]

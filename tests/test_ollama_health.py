@@ -7,6 +7,16 @@ from app.llm import ollama_client
 from app.llm.ollama_client import OllamaClient
 
 
+def test_truncated_completion_is_not_returned_as_an_answer(monkeypatch):
+    client_type = httpx.AsyncClient
+    def handle(request):
+        return httpx.Response(200, json={"done_reason": "length", "message": {"content": "Unfinished answer"}})
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: client_type(transport=httpx.MockTransport(handle), **kwargs))
+    with pytest.raises(ollama_client.OllamaError, match="output limit"):
+        asyncio.run(OllamaClient("http://localhost:11434", "phi4-mini:latest").chat([
+            {"role": "user", "content": "Explain"}]))
+
+
 @pytest.mark.parametrize("thinking, expected", [("", "low"), ("false", "low"), ("true", "low"), ("high", "high")])
 def test_gpt_oss_named_reasoning_and_structured_output(monkeypatch, thinking, expected):
     client_type = httpx.AsyncClient

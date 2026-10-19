@@ -26,7 +26,7 @@ def usage_stage(name):
         _stage.reset(token)
 
 
-def record_usage(payload, model, context=None):
+def record_usage(payload, model, context=None, wall_seconds=None):
     calls = _calls.get()
     if calls is None:
         return
@@ -36,6 +36,12 @@ def record_usage(payload, model, context=None):
     calls.append({"stage": _stage.get(), "model": model,
                   "input_tokens": count("prompt_eval_count"),
                   "output_tokens": count("eval_count")})
+    for key in ("total_duration", "load_duration", "prompt_eval_duration", "eval_duration"):
+        value = payload.get(key)
+        if type(value) in (int, float) and value >= 0:
+            calls[-1][key.replace("_duration", "_seconds")] = value / 1_000_000_000
+    if wall_seconds is not None:
+        calls[-1]["wall_seconds"] = wall_seconds
     if context is not None:
         calls[-1]["context"] = context
 

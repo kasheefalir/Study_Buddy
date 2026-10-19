@@ -19,7 +19,11 @@ real ambiguity or a missing requested source. Use none for unrelated conversatio
 ## Choose a Reading Strategy
 - Specific question: search_materials with a standalone query about the current
   concept. The local semantic index searches passage meaning as well as exact
-  terms; read adjacent passages for definitions and qualifications. Do not send
+  terms. document_ids already restrict the source: leave the book title, author,
+  filename, and phrases like "what does the material say" out of the search query.
+  Preserve the actual concept and requested relationship (e.g. "logistic regression").
+  Search for the concept, not the document's identity. Read adjacent passages
+  for definitions and qualifications. Do not send
   the learner to search an available selected material before using this tool.
 - Whole-material summary: review_materials. Short sources can fit in full;
   long sources need a complete cached section/chapter hierarchy. A few search

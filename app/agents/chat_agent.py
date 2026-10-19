@@ -11,7 +11,7 @@ from app.llm.usage import track_usage, usage_stage, summarize
 from app.agents.tasks import PROMPTS, task_for, task_prompt
 from app.agents.study_tools import review_materials, structured, IntentRoute, IntentDecision
 from app.agents.quiz import quiz_turn, public_question, selected_option, REVIEW, START, NEXT, CHANGE
-from app.agents.context_budget import pack, compress
+from app.agents.context_budget import pack, compress, model_budget
 from app.agents.reflection import reflect
 from app.agents.grounded_answer import answer_from_sources
 from app.agents.retrieval_context import current_study_session, reusable_evidence
@@ -44,6 +44,13 @@ def needs_reference(message, quiz):
 
 
 class ChatAgent:
+    router_prompt = ROUTER_PROMPT
+    retrieval_prompt = RETRIEVAL_PLAN_PROMPT
+    system_prompt = SYSTEM_PROMPT
+
+    async def quiz_step(self, *args, **kwargs):
+        return await quiz_turn(*args, **kwargs)
+
     def __init__(self, llm: OllamaClient, conversations: ConversationStore) -> None:
         self.llm = llm
         self.conversations = conversations
@@ -51,7 +58,7 @@ class ChatAgent:
     async def reply(self, message: str, conversation_id: str | None = None, document_id: str = "", materials_root=None,
                     task: str = "auto", document_ids=None, quiz_question_id: str | None = None,
                     next_question_id: str | None = None) -> tuple[str, str]:
-        with track_usage() as calls:
+        with model_budget(getattr(self.llm, "model", None)), track_usage() as calls:
             return await self._reply(message, conversation_id, document_id, materials_root, calls, task, document_ids,
                                      quiz_question_id, next_question_id)
 
@@ -76,11 +83,11 @@ class ChatAgent:
             mode = "quiz"
         route = None
         if next_question_id:
-            if quiz.get("question_id") != next_question_id or quiz.get("phase") not in {"review", "complete"}:
+            if quiz.get("ended") or quiz.get("question_id") != next_question_id or quiz.get("phase") not in {"review", "complete"}:
                 raise ValueError("Quiz progress has changed. Refresh the session before advancing.")
             mode = "quiz"
             route = {"route": "quiz", "mode": "quiz", "activity_action": "next", "pause_activity": False}
-            quiz.update(active=quiz.get("phase") != "complete", paused=False)
+            quiz.update(active=quiz.get("phase") != "complete", paused=False, ended=False)
         reusable = reusable_evidence(materials_root, document_ids, history) if materials_root and document_ids else []
         last_material_request = next((m.get("material_review", {}).get("resolved_request")
             for m in reversed(history) if m.get("material_review", {}).get("resolved_request")), "")
@@ -97,13 +104,14 @@ class ChatAgent:
                     except (OSError, ValueError, TypeError):
                         continue
             try:
-                route = await structured(self.llm, "intent route", ROUTER_PROMPT,
+                route = await structured(self.llm, "intent route", self.router_prompt,
                     {"latest_message": message[:1500],
                      "last_material_request": last_material_request[:1000],
                      "recent_dialogue": [{"role": m["role"], "content": m["content"][:350]} for m in history[-3:]],
                      "selected_materials": inventory,
                      "unfinished_activity": {"mode": mode, "quiz_active": bool(quiz.get("active")),
                                          "quiz_paused": bool(quiz.get("paused")), "phase": quiz.get("phase", ""),
+                                         "quiz_ended": bool(quiz.get("ended")),
                                          "pending_question": quiz.get("pending_question", "")[:300]},
                      "explicit_task": task})
                 mode = route.get("mode", "chat")
@@ -114,7 +122,7 @@ class ChatAgent:
                 elif mode not in {"summary_material", "simplify"}:
                     mode = "chat"
                 if route["route"] == "retrieve":
-                    decision = await structured(self.llm, "retrieval plan", RETRIEVAL_PLAN_PROMPT,
+                    decision = await structured(self.llm, "retrieval plan", self.retrieval_prompt,
                         {"latest_message": message[:1500],
                          "last_material_request": last_material_request[:1000],
                          "recent_dialogue": [{"role": m["role"], "content": m["content"][:350]} for m in history[-3:]],
@@ -127,7 +135,8 @@ class ChatAgent:
                     selected = set(document_ids or [])
                     resolved = [identifier for identifier in decision["document_ids"] if identifier in selected]
                     document_ids = resolved or document_ids
-            except (AssertionError, AttributeError, KeyError, RuntimeError, TypeError, ValueError):
+            except (AssertionError, AttributeError, KeyError, RuntimeError, TypeError, ValueError) as exc:
+                logging.getLogger(__name__).warning("Intent/planning failed for %s: %s", getattr(self.llm, "model", "unknown"), type(exc).__name__)
                 # Planner failures cannot change the intent owner's decision.
                 if route and route.get("route") == "conversation":
                     mode = "chat"
@@ -139,16 +148,28 @@ class ChatAgent:
             if action == "start" and route["route"] == "quiz":
                 quiz = {}
             elif action == "end":
-                quiz.update(active=False, paused=False)
+                quiz.update(active=False, paused=False, ended=True)
             elif action in {"resume", "next"} and route["route"] == "quiz":
-                quiz.update(active=quiz.get("phase") != "complete", paused=False)
+                quiz.update(active=quiz.get("phase") != "complete", paused=False, ended=False)
             if route and (route["pause_activity"] or action == "pause") and mode != "quiz":
                 quiz["paused"] = True
                 quiz["active"] = False
+        # Lifecycle acknowledgements must not become free-form quiz generation.
+        closed_quiz = quiz.get("version") and not quiz.get("active") and not quiz.get("paused")
+        end_requested = route and route.get("activity_action") == "end"
+        clarify_closed = route and route.get("route") == "clarify" and closed_quiz
+        if end_requested or clarify_closed:
+            response = ("Quiz ended. Your answers are saved for review. You can resume it or start a new quiz."
+                        if end_requested else
+                        "That quiz is closed. Would you like to resume it or start a new quiz?")
+            self.conversations.save(active_id, [*history, {"role": "user", "content": message},
+                {"role": "assistant", "content": response, "routing": route, "usage": summarize(calls)}],
+                document_ids=session_document_ids, quiz=quiz)
+            return active_id, response
         if mode == "quiz" and not quiz.get("active") and not quiz.get("version") and not REVIEW.search(message):
             quiz = {"active": True, "topic": message[:500], "pending_question": "", "turns": 0}
         if (document_ids is not None or review_request) and mode == "quiz" and (review_request or not route or route["route"] == "quiz"):
-            response, quiz, sources = await quiz_turn(materials_root, document_ids or [], message, quiz, self.llm, history,
+            response, quiz, sources = await self.quiz_step(materials_root, document_ids or [], message, quiz, self.llm, history,
                 **({"activity_action": route.get("activity_action", "keep")} if route else {}))
             if response is not None:
                 question_ui = public_question(quiz)
@@ -157,7 +178,8 @@ class ChatAgent:
                     for entry in history:
                         if entry.get("quiz_question", {}).get("id") == question_ui["id"]:
                             entry["quiz_question"] = question_ui
-                show_question = question_ui and question_ui["id"] != previous_question
+                show_question = question_ui and (question_ui["id"] != previous_question
+                    or not saved_quiz.get("active") and quiz.get("active"))
                 user_entry = {"role": "user", "content": message}
                 if quiz_question_id:
                     user_entry["quiz_selection_for"] = quiz_question_id
@@ -169,9 +191,10 @@ class ChatAgent:
             if explicit_quiz_answer:
                 return active_id, "That question has already been answered. Choose Next question, or ask about this one."
             mode = "chat"
-        prompt = SYSTEM_PROMPT + "\nCurrent activity:\n" + task_prompt(mode)
+        prompt = self.system_prompt + "\nCurrent activity:\n" + task_prompt(mode)
         if route and route["route"] in {"conversation", "clarify"}:
             prompt += "\nThis turn is conversational, not a continuation of material analysis. Answer the latest message naturally. Selected materials are background awareness, not a request to teach them. Do not resume a previous task unless the student requests it."
+            prompt += "\nNo source lookup was performed this turn. Never claim to have checked the material or that a topic is absent from it. Earlier assistant answers are not verified source evidence."
         context = {}
         if study_session:
             context["study_session"] = study_session
@@ -253,12 +276,20 @@ class ChatAgent:
                 logging.getLogger(__name__).warning("Conversation summary unavailable; retaining saved summary and recent context")
             messages, packed_sources, budget = pack(prompt, message, history, context, sources, self.conversations.max_messages)
         budget["summarized_messages"] = summary_state.get("through", 0)
+        retrieved_count = len(sources)
         sources = packed_sources
         missing_evidence = evidence_required and not sources
         if missing_evidence:
             response = MISSING_EVIDENCE
         elif sources:
-            response = await answer_from_sources(self.llm, messages, sources, resolved_request=retrieval_question)
+            response = await answer_from_sources(self.llm, messages, sources, resolved_request=retrieval_question,
+                evidence_status={"retrieved_passages": retrieved_count,
+                    "supplied_passages": len(sources),
+                    "omitted_for_budget": retrieved_count - len(sources),
+                    "truncated": any(s.get("truncated") for s in sources),
+                    "preparing_overviews": [{"document_id": item.get("document_id"), "status": item.get("status")}
+                        for item in review_context.get("preparing_overviews", [])],
+                    "guidance": "Coverage is limited to supplied evidence; do not claim the entire original text was read."})
         else:
             response = await self.llm.chat(messages)
         async def retrieve_again(feedback):
@@ -284,6 +315,7 @@ class ChatAgent:
             user_entry["quiz_selection_for"] = quiz_question_id
         updated: list[Message] = [*history, user_entry,
                                  {"role": "assistant", "content": response, "sources": sources, "material_review": review_context,
+                                  "routing": route,
                                   "reflection": reflection,
                                   "usage": {**summarize(calls), "context": budget}}]
         self.conversations.save(active_id, updated, document_id=document_id, document_ids=session_document_ids, quiz=quiz, summary=summary_state)

@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from app.agents.quiz import quiz_turn, answer_index, missed_review
+from app.agents.quiz import quiz_turn, answer_index, missed_review, choice_feedback_problem
 
 
 class Explainer:
@@ -67,3 +67,48 @@ def test_missed_review_uses_saved_verdicts_not_model_interpretation():
     ]})
     assert "Missed concept" in text
     assert "Correct concept" not in text
+
+
+@pytest.mark.parametrize("answer", ["B", "D"])
+def test_invalid_feedback_cannot_block_last_answer_or_duplicate_score(answer):
+    class Broken:
+        calls = 0
+
+        async def structured_plan(self, messages, schema):
+            self.calls += 1
+            return "not JSON"
+
+    model = Broken()
+    initial = quiz()
+    initial.update(total=10, cursor=9, results=[{"number": i + 1, "verdict": "correct"} for i in range(9)])
+    text, state, _ = asyncio.run(quiz_turn(None, [], answer, initial, model))
+    assert model.calls == 2
+    assert state["phase"] == "complete" and not state["active"]
+    assert len(state["results"]) == 10 and len(initial["results"]) == 9
+    assert state["results"][-1]["feedback_status"] == "unavailable"
+    assert state["results"][-1]["verdict"] == ("correct" if answer == "D" else "incorrect")
+    assert "saved answer key is D: Update specific fields" in text
+    _, again, _ = asyncio.run(quiz_turn(None, [], "Next question", state, model))
+    assert len(again["results"]) == 10 and model.calls == 2
+
+
+def test_malformed_feedback_is_repaired_before_fallback():
+    class Repairing(Explainer):
+        calls = 0
+
+        async def structured_plan(self, messages, schema):
+            self.calls += 1
+            return "{}" if self.calls == 1 else await super().structured_plan(messages, schema)
+
+    model = Repairing()
+    _, state, _ = asyncio.run(quiz_turn(None, [], "D", quiz(), model))
+    assert model.calls == 2
+    assert state["results"][-1]["feedback_status"] == "generated"
+
+
+@pytest.mark.parametrize("explanation", ["The `?` operator opens help.",
+    "Use ?mutate to access help.", "The ? operator accesses documentation.",
+    "The '?' symbol opens help."])
+def test_code_help_operator_is_not_a_new_quiz_question(explanation):
+    assert not choice_feedback_problem({"explanation": explanation})
+    assert choice_feedback_problem({"explanation": explanation + " What would you try next?"})

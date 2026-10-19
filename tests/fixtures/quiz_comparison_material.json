@@ -1,0 +1,12 @@
+[
+  {"heading":"Mean", "text":"The arithmetic mean is the sum of all observations divided by the number of observations. An extreme value can substantially change the mean."},
+  {"heading":"Median", "text":"The median is the middle value after sorting observations. For an even number of observations it is the mean of the two middle values. Extreme values generally affect the median less than the mean."},
+  {"heading":"Correlation", "text":"Correlation describes the strength and direction of a linear association between two variables. Correlation alone does not establish that one variable causes the other."},
+  {"heading":"R-squared", "text":"R-squared describes the proportion of observed variation in the response accounted for by a fitted regression model. R-squared of 0.8 means 80 percent of that variation is accounted for. It does not mean 80 percent of predictions are correct."},
+  {"heading":"Training and testing", "text":"A training set is used to fit a model. A held-out test set is used to evaluate performance on examples not used for fitting. Test results should not be used to repeatedly choose model settings."},
+  {"heading":"Overfitting", "text":"Overfitting occurs when a model fits idiosyncrasies of its training data and performs poorly on new data. Good training performance alone does not demonstrate good generalization."},
+  {"heading":"Precision", "text":"Precision is the number of true positive predictions divided by all positive predictions. False positive predictions reduce precision when the number of true positives stays fixed."},
+  {"heading":"Recall", "text":"Recall is the number of true positive predictions divided by all actual positives. False negatives are actual positives that were not identified. Reducing false negatives while holding actual positives fixed increases recall."},
+  {"heading":"Standardization", "text":"Standardization subtracts a feature's training mean and divides by its training standard deviation. Apply those same training statistics to test data; do not fit preprocessing on test data."},
+  {"heading":"Data leakage", "text":"Data leakage occurs when information unavailable at prediction time enters model training or evaluation. Using future outcomes as input features is an example. Leakage can make evaluation appear better than real-world performance."}
+]

@@ -74,3 +74,26 @@ def test_overview_pause_keeps_completed_sections(tmp_path):
     asyncio.run(run())
     state = overview.status(tmp_path, identifier)
     assert state["status"] == "paused" and state["completed"] == 1
+
+
+def test_merge_preserves_child_details_and_all_concepts(tmp_path):
+    identifier, _ = source(tmp_path)
+    summary = "Background. " * 70 + "Important qualification at the end."
+    concepts = ["Concept " + str(i) for i in range(5)]
+
+    class Detailed(Model):
+        async def structured_plan(self, messages, schema):
+            self.calls.append(messages)
+            return json.dumps({"summary": summary, "concepts": concepts})
+
+    model = Detailed()
+    result = asyncio.run(overview.prepare(tmp_path, identifier, model))
+    assert result["status"] == "ready"
+    merges = [json.loads(call[-1]["content"]) for call in model.calls
+              if "sections" in json.loads(call[-1]["content"])]
+    assert merges
+    for payload in merges:
+        for child in payload["sections"]:
+            assert child["summary"] == summary
+            assert child["concepts"] == concepts
+            assert child["heading"]
