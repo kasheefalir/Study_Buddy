@@ -84,46 +84,28 @@ Study Buddy folder or its saved data.
 
 ### Mac: First-Time Setup
 
-1. Open **Terminal** using Spotlight. Install [Homebrew](https://brew.sh), which
-   downloads the other tools for you. Skip this command if Homebrew is already
-   installed. This runs Homebrew's official installer; read its prompts and
-   approve installation only if you trust it. Password typing may be invisible.
+1. **Install Ollama's desktop app.** Open [Ollama for Mac](https://ollama.com/download/mac)
+   and choose **Download manually** if the page shows a terminal command.
+   Open the download, move Ollama to **Applications** if prompted, then open
+   **Ollama** and finish its setup. Leave it running. You do not need to chat
+   inside Ollama; Study Buddy will use it in the background.
+
+2. **Install Python.** On [Python's Mac downloads page](https://www.python.org/downloads/macos/),
+   choose a **Python 3.13** release and download its **macOS installer**.
+   Open the installer and follow its steps. This avoids installing Homebrew.
+   Skip this if `python3.13 --version` already works in Terminal.
+
+3. **Download Study Buddy.** On [GitHub](https://github.com/kasheefalir/Study_Buddy),
+   choose **Code > Download ZIP**. Double-click the ZIP and move the extracted
+   **Study_Buddy-main** folder to your **Desktop**. Keep that folder there.
+   If it already exists, do not replace it: see
+   [Already Have Study Buddy Installed?](#already-have-study-buddy-installed).
+
+4. **Set up and launch.** Open a new **Terminal** using Spotlight. Paste this
+   whole block and press Enter. The `&&` joins stop it if a command fails.
 
 ```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-```
-
-2. Make Homebrew available in this Terminal, then install **Python, Ollama, and
-   Git** together. This handles standard Apple Silicon and Intel Homebrew paths.
-   Follow Homebrew's printed **Next steps** to make its PATH setting permanent.
-
-```bash
-if [ -x /opt/homebrew/bin/brew ]; then
-  eval "$(/opt/homebrew/bin/brew shellenv)"
-elif [ -x /usr/local/bin/brew ]; then
-  eval "$(/usr/local/bin/brew shellenv)"
-fi
-brew install python@3.13 ollama git
-```
-
-This installs Ollama's command-line runtime; its separate desktop app is not
-required. Study Buddy starts the service when needed. Check the current
-[Homebrew requirements](https://docs.brew.sh/Installation) if installation fails
-on an older Mac; the manual alternative below avoids Homebrew.
-
-3. Download Study Buddy into a new **Study_Buddy** folder on your Desktop:
-
-```bash
-cd "$HOME/Desktop" && git clone https://github.com/kasheefalir/Study_Buddy.git && cd Study_Buddy
-```
-
-If `Study_Buddy` already exists, stop; do not delete it to make this command work.
-For an existing installation, use [Already Have Study Buddy Installed?](#already-have-study-buddy-installed).
-
-4. In that same Terminal, install the app's packages, register the shortcut,
-   and start the app. The `&&` joins stop this step if an earlier command fails.
-
-```bash
+cd "$HOME/Desktop/Study_Buddy-main" &&
 python3.13 -m venv .venv &&
 .venv/bin/python -m pip install -r requirements.txt &&
 .venv/bin/python -m app.install_command &&
@@ -132,96 +114,57 @@ bash start-mac.command
 
 5. Leave Terminal open. Wait for the server address, then open
    **http://127.0.0.1:8000** in your browser (or the address printed in Terminal).
-   First startup downloads the default `llama3.2:3b` model if needed.
+   First startup downloads the default AI model if needed.
    Next time, open a fresh Terminal and type **`study buddy`** from any folder.
 
-**Prefer manual downloads on Mac?** Install [Python 3.11 or newer for macOS](https://www.python.org/downloads/macos/)
-and [Ollama for macOS](https://ollama.com/download/mac), then open Ollama once.
-On [GitHub](https://github.com/kasheefalir/Study_Buddy), choose **Code > Download ZIP**.
-Double-click the ZIP and move the extracted `Study_Buddy-main` folder to Desktop.
-Open a new Terminal and run this instead of steps 1-4; Git and Homebrew are not needed:
+If you renamed the extracted folder, type `cd `, drag the folder from Finder
+into Terminal, and press Enter instead of using the first line. Then run the
+remaining commands. If you already have a compatible Python 3.11 or newer
+installed under `python3`, you can use that in place of `python3.13`.
+
+**Already use Git?** Instead of the ZIP download, run this in Terminal, then use
+the setup commands above starting at `python3.13 -m venv .venv`:
 
 ```bash
-cd "$HOME/Desktop/Study_Buddy-main" &&
-python3 --version &&
-python3 -m venv .venv &&
-.venv/bin/python -m pip install -r requirements.txt &&
-.venv/bin/python -m app.install_command &&
-bash start-mac.command
+cd "$HOME/Desktop" && git clone https://github.com/kasheefalir/Study_Buddy.git && cd Study_Buddy
 ```
-
-The printed Python version must be 3.11 or newer. If you renamed the folder,
-type `cd `, drag the folder from Finder into Terminal, and press Enter instead
-of the first line. The remaining commands run inside that folder.
 
 ### Windows: First-Time Setup
 
-1. Open **PowerShell** from Start (not Command Prompt). Install **Python, Ollama,
-   and Git** using Windows Package Manager. Run these commands one at a time,
-   waiting for each installer to finish and accepting its prompts:
+1. **Install Ollama's desktop app.** Open [Ollama for Windows](https://ollama.com/download/windows)
+   and choose **Download manually** if the page shows a terminal command.
+   Run the downloaded installer, then open **Ollama** from Start and finish
+   its setup. Leave it running. You do not need to chat inside Ollama.
+
+2. **Install Python.** Open **PowerShell** from Start and paste this command.
+   Accept the installer prompts and wait for it to finish:
 
 ```powershell
 winget install --id Python.Python.3.13 --exact --source winget
-winget install --id Ollama.Ollama --exact --source winget
-winget install --id Git.Git --exact --source winget
 ```
 
-If `winget` is not recognized, install or update **App Installer** from Microsoft
-Store, or use the manual alternative below. See Microsoft's
-[WinGet instructions](https://learn.microsoft.com/en-us/windows/package-manager/winget/install).
+   **Prefer a download, or winget isn't available?** Visit
+   [Python for Windows](https://www.python.org/downloads/windows/), choose a
+   **Python 3.13** release, and run the Windows installer matching your computer.
+   Enable **Add Python to PATH** when offered and keep the Python launcher enabled.
+   Skip installation if `py -3.13 --version` already works.
 
-2. **Close your terminal application completely, then reopen PowerShell.** This
-   lets Windows find the newly installed commands. Open **Ollama** from Start.
-   Check that the commands are available:
+3. **Download Study Buddy.** On [GitHub](https://github.com/kasheefalir/Study_Buddy),
+   choose **Code > Download ZIP**. Right-click the ZIP, choose **Extract All**,
+   and move the extracted **Study_Buddy-main** folder to your **Desktop**.
+   Do not run the app from inside the ZIP or replace an existing project folder.
 
-```powershell
-py -3.13 --version
-ollama --version
-git --version
-```
-
-3. Download and set up Study Buddy on your Desktop. This finds the real Desktop
-   location, including when Windows has moved it into OneDrive. It refuses to
-   overwrite an existing `Study_Buddy` folder and stops on command failures.
-
-```powershell
-& {
-    $ErrorActionPreference = "Stop"
-    Set-Location ([Environment]::GetFolderPath("Desktop"))
-    if (Test-Path "Study_Buddy") { throw "Study_Buddy already exists. Use your existing folder; do not overwrite it." }
-    git clone https://github.com/kasheefalir/Study_Buddy.git
-    if ($LASTEXITCODE -ne 0) { throw "Download failed." }
-    Set-Location "Study_Buddy"
-    py -3.13 -m venv .venv
-    if ($LASTEXITCODE -ne 0) { throw "Python setup failed." }
-    .\.venv\Scripts\python.exe -m pip install -r requirements.txt
-    if ($LASTEXITCODE -ne 0) { throw "Package installation failed." }
-    .\.venv\Scripts\python.exe -m app.install_command
-    if ($LASTEXITCODE -ne 0) { throw "Shortcut registration failed." }
-    .\start-windows.bat
-}
-```
-
-4. Leave PowerShell open. Wait for the server address, then open
-   **http://127.0.0.1:8000** in your browser (or the address printed in PowerShell).
-   First startup downloads the default `llama3.2:3b` model if needed.
-   Next time, open a fresh terminal and type **`study buddy`** from any folder.
-   If Windows still cannot find `study`, sign out and back in once.
-
-**Prefer manual downloads on Windows?** Install [Python for Windows](https://www.python.org/downloads/windows/)
-(3.11 or newer; enable **Add Python to PATH** when offered) and
-[Ollama for Windows](https://ollama.com/download/windows). Open Ollama once.
-On [GitHub](https://github.com/kasheefalir/Study_Buddy), choose **Code > Download ZIP**,
-then right-click the ZIP and choose **Extract All**. Move the extracted
-`Study_Buddy-main` folder to Desktop. Do not run from inside the ZIP.
-Open a new **PowerShell** and paste this instead of steps 1-3; Git is not needed:
+4. **Set up and launch.** Close your terminal application completely, then reopen
+   **PowerShell** (not Command Prompt). Paste this whole block and press Enter.
+   It finds your Desktop even if Windows stores it in OneDrive, and stops if a
+   setup command fails.
 
 ```powershell
 & {
     $ErrorActionPreference = "Stop"
     Set-Location (Join-Path ([Environment]::GetFolderPath("Desktop")) "Study_Buddy-main")
-    python -m venv .venv
-    if ($LASTEXITCODE -ne 0) { throw "Python setup failed. Check Python installation and PATH." }
+    py -3.13 -m venv .venv
+    if ($LASTEXITCODE -ne 0) { throw "Python setup failed. Check Python installation." }
     .\.venv\Scripts\python.exe -m pip install -r requirements.txt
     if ($LASTEXITCODE -ne 0) { throw "Package installation failed." }
     .\.venv\Scripts\python.exe -m app.install_command
@@ -230,9 +173,26 @@ Open a new **PowerShell** and paste this instead of steps 1-3; Git is not needed
 }
 ```
 
-If `python` opens the Store or is not found, try `py -m venv .venv` in place of
-`python -m venv .venv` after confirming `py --version` reports 3.11 or newer.
-No PowerShell execution-policy changes or environment activation are required.
+5. Leave PowerShell open. Wait for the server address, then open
+   **http://127.0.0.1:8000** in your browser (or the address printed in PowerShell).
+   First startup downloads the default AI model if needed.
+   Next time, open a fresh terminal and type **`study buddy`** from any folder.
+   If Windows still cannot find `study`, sign out and back in once.
+
+If `py` is not found but `python --version` reports a compatible Python 3.11 or
+newer, replace `py -3.13` with `python`. No PowerShell execution-policy changes
+or environment activation are required.
+
+**Already use Git?** Instead of downloading the ZIP, run these commands in
+PowerShell, one at a time. Stop if any command fails:
+
+```powershell
+Set-Location ([Environment]::GetFolderPath("Desktop"))
+git clone https://github.com/kasheefalir/Study_Buddy.git
+```
+
+Then use step 4, changing `"Study_Buddy-main"` to `"Study_Buddy"`.
+Do not overwrite an existing project folder.
 
 ### Already Have Study Buddy Installed?
 
