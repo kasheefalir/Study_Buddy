@@ -146,7 +146,7 @@ function initChatTools() {
   document.querySelectorAll("[data-prompt]").forEach(button => button.onclick = () => {
     if (!$("#message").value.trim()) {
       $("#message").value = button.dataset.prompt;
-      $("#task-mode").value = button.dataset.task;
+      $("#task-mode").value = "auto";
       delete $("#message").dataset.nextQuestionId;
       if (button.id === "next-question") $("#message").dataset.nextQuestionId = button.dataset.questionId;
     }

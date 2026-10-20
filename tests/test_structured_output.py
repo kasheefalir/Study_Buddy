@@ -52,3 +52,11 @@ def test_fenced_invalid_intent_is_still_rejected():
             return '```json\n{"route":"invented","reasoning":"Read","query":"trees"}\n```'
     with pytest.raises(ValueError):
         asyncio.run(structured(Model(), "intent route", "Route", {}))
+
+
+def test_fenced_answer_reports_citation_limit_not_json_syntax():
+    from app.agents.grounded_answer import GroundedAnswer
+    raw = json.dumps({"points": [{"explanation": "Main ideas", "evidence": [
+        {"label": f"S{i}"} for i in range(1, 7)]}]})
+    with pytest.raises(ValueError, match="at most 4"):
+        validated_output("```json\n" + raw + "\n```", GroundedAnswer)

@@ -8,6 +8,7 @@ from app.agents.activity import report
 from app.agents.context_budget import estimate, input_limit
 from app.llm.usage import usage_stage
 from app.llm.structured_output import validated_output, strip_json_fence
+from app.errors import StudyError
 
 
 class Evidence(BaseModel):
@@ -194,6 +195,9 @@ async def answer_from_sources(llm, messages, sources, resolved_request="", evide
         '\n' + DOCUMENT_BOUNDARY + 'Return JSON with points. Each evidence entry must be an object {"label":"S1"}, '
         'not a string. For each point, first identify the labels of the supporting '
         "passages. Use 1-4 focused points; one is enough for a narrow question. Do not repeat points. "
+        "Each point must cite 1-4 source labels, never more than four. For a broad summary, "
+        "choose focused main ideas supported by those citations; do not combine more claims "
+        "than the cited passages support. "
         "Then write an explanation of ONLY what those passages "
         "state, addressing the student's question. Include enough evidence to support the entire "
         "explanation. Preserve qualifications and comparisons. No extra conclusions or advice. "
@@ -245,7 +249,7 @@ async def answer_from_sources(llm, messages, sources, resolved_request="", evide
             if attempt:
                 if accepted:
                     return "I could support only part of the explanation.\n\n" + render_answer(GroundedAnswer(points=accepted).model_dump_json(), sources)
-                return EVIDENCE_GAP
+                raise StudyError("Professor couldn't organize a valid sourced response. Please retry.", "invalid_response") from exc
             request[0]["content"] += (
                 "\nThe previous attempt failed validation: " + str(exc)[:400] +
                 ". Use concise supported explanations and actual source labels."

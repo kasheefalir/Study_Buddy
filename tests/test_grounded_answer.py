@@ -79,9 +79,29 @@ def test_invalid_evidence_never_becomes_visible_answer():
     class Model:
         async def structured_plan(self, messages, schema):
             return response(label="Invented source")
-    result = asyncio.run(answer_from_sources(Model(), [{"role": "system", "content": "Explain evidence."}], SOURCES))
-    assert "couldn't support an explanation" in result
-    assert "distance advantage" not in result
+    from app.errors import StudyError
+    with pytest.raises(StudyError) as error:
+        asyncio.run(answer_from_sources(Model(), [{"role": "system", "content": "Explain evidence."}], SOURCES))
+    assert error.value.code == "invalid_response"
+
+
+def test_fenced_summary_retry_gets_real_citation_limit():
+    class Model:
+        calls = 0
+
+        async def structured_plan(self, messages, schema):
+            if schema["title"] == "GroundingCheck":
+                return json.dumps({"checks": {"0": {"supported": True}}})
+            self.calls += 1
+            if self.calls == 1:
+                answer = json.loads(response())
+                answer["points"][0]["evidence"] = [{"label": "S1"}] * 6
+                return "```json\n" + json.dumps(answer) + "\n```"
+            assert "at most 4" in messages[0]["content"]
+            return response()
+
+    result = asyncio.run(answer_from_sources(Model(), [{"role": "system", "content": "Summarize."}], SOURCES))
+    assert result.endswith("[S1]")
 
 
 def test_valid_source_reference_does_not_excuse_unsupported_explanation():

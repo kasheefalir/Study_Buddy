@@ -28,6 +28,18 @@ def test_explicit_modes_and_prompt_files():
         task_for("Hello", "../bad", {})
 
 
+@pytest.mark.parametrize("message,expected", [
+    ("Explain that more simply.", "simplify"),
+    ("Quiz me on the main ideas in this session's material, one question at a time.", "quiz"),
+    ("Next question", "quiz"),
+    ("Review my missed answers.", "quiz"),
+    ("Recap our conversation.", "summary_conversation"),
+    ("Summarize the selected study material.", "summary_material"),
+])
+def test_prompt_text_routes_without_explicit_mode(message, expected):
+    assert task_for(message, "auto", {"version": 1, "active": True}) == expected
+
+
 def test_recap_and_hint_preserve_quiz_and_skip_retrieval(tmp_path):
     class Model:
         def __init__(self):

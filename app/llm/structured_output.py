@@ -24,6 +24,8 @@ def validated_output(raw, model):
                     and set(value) <= {"properties", "required", "title", "type"}
                     and all(value[key] == schema.get(key) for key in value if key != "properties")):
                 value = value["properties"]
-            return model.model_validate_json(json.dumps(value))
         except (ValueError, TypeError):
             raise original
+        # After a recognized envelope is removed, report the actual field error
+        # so bounded retries can fix it instead of seeing a misleading JSON error.
+        return model.model_validate_json(json.dumps(value))
