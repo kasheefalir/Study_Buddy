@@ -1,0 +1,55 @@
+name: Windows installer
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "packaging/windows/**"
+      - ".github/workflows/windows-installer.yml"
+      - "app/desktop.py"
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          architecture: x64
+      - name: Install build dependencies
+        run: python -m pip install -r requirements.txt pyinstaller==6.16.0
+      - name: Regression tests
+        run: python -m pytest -q tests/test_desktop.py
+      - name: Bundle Python and application
+        run: python -m PyInstaller --noconfirm packaging/windows/StudyBuddy.spec
+      - name: Verify bundled imports and browser assets
+        shell: pwsh
+        run: |
+          $env:BUDDY_DATA_DIR = Join-Path $env:RUNNER_TEMP "buddy-smoke"
+          $process = Start-Process -FilePath "dist\StudyBuddy\StudyBuddy.exe" -ArgumentList "--smoke-test" -PassThru
+          if (!$process.WaitForExit(120000)) { $process.Kill(); throw "Smoke test timed out." }
+          if ($process.ExitCode -ne 0) {
+            Get-Content "$env:BUDDY_DATA_DIR\logs\desktop.log" -ErrorAction SilentlyContinue
+            throw "Packaged smoke test failed."
+          }
+      - name: Compile installer
+        shell: pwsh
+        run: |
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" packaging/windows/setup.iss
+          if ($LASTEXITCODE -ne 0) { throw "Installer compilation failed." }
+      - name: Verify installer can install and uninstall
+        shell: pwsh
+        run: |
+          $destination = Join-Path $env:RUNNER_TEMP "Study Buddy installed"
+          $process = Start-Process -FilePath "dist\installer\StudyBuddy-Windows-Setup.exe" -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR=`"$destination`"" -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Installation failed." }
+          if (!(Test-Path "$destination\StudyBuddy.exe")) { throw "Installed launcher missing." }
+          $process = Start-Process -FilePath "$destination\unins000.exe" -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Uninstall failed." }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: StudyBuddy-Windows-Installer
+          path: dist/installer/*.exe
+          if-no-files-found: error

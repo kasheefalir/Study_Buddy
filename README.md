@@ -131,6 +131,11 @@ cd "$HOME/Desktop" && git clone https://github.com/kasheefalir/Study_Buddy.git &
 
 ### Windows: First-Time Setup
 
+A bundled Windows installer is being prepared as a preview. It removes the
+separate Python setup and terminal steps; see
+[Windows installer status and instructions](docs/windows-installer.md).
+The source-download instructions below remain available.
+
 1. **Install Ollama's desktop app.** Open [Ollama for Windows](https://ollama.com/download/windows)
    and choose **Download manually** if the page shows a terminal command.
    Run the downloaded installer, then open **Ollama** from Start and finish
