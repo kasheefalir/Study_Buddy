@@ -4,6 +4,14 @@ The Windows installer bundles Python and the app's Python dependencies. Students
 do not need Python, Git, PowerShell commands, or a virtual environment.
 Ollama and model weights are not bundled.
 
+The [first Windows build](https://github.com/kasheefalir/Study_Buddy/actions/runs/39475990583)
+passed on October 20, 2026: launcher unit tests, frozen import/resource checks,
+installer compilation, and silent install/uninstall. Its
+**StudyBuddy-Windows-Installer** artifact is approximately 35 MB.
+Extract the downloaded artifact ZIP to get the installer. GitHub sign-in may be
+required, and Actions artifacts expire; this is not yet a permanent release link.
+Interactive clean-machine acceptance testing is still pending.
+
 ## Student Setup
 
 1. Download `StudyBuddy-Windows-Setup.exe` from the Windows installer build artifact.
