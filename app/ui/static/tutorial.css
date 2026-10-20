@@ -1,0 +1,13 @@
+#welcome-tour { position: fixed; inset: auto 16px 16px auto; margin: 0; width: min(420px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); box-sizing: border-box; padding: 20px; border: 2px solid #416251; border-radius: 8px; background: #fff; color: #263d32; box-shadow: 0 6px 24px #0003; overflow: auto; }
+#welcome-tour::backdrop { background: #152d2226; }
+#welcome-tour h2 { font-size: 22px; margin: 12px 0 8px; }
+#welcome-tour p { font-size: 16px; line-height: 1.5; margin: 0 0 16px; }
+.tour-heading, .tour-controls { display: flex; align-items: center; gap: 12px; }
+.tour-heading { flex-wrap: wrap; }
+#tour-progress { font-size: 13px; }
+#tour-skip { margin-left: auto; }
+.tour-controls { justify-content: space-between; }
+#tour-next { background: #355c49; color: white; }
+#welcome-tour button { min-height: 40px; padding: 8px 12px; }
+.tour-highlight { outline: 3px solid #b66b35 !important; outline-offset: 4px; }
+#welcome-tour .professor-thinking { animation: none; }

@@ -24,6 +24,11 @@ web browser, with a small interactive classroom as your starting point.
 
 Once the app is set up and running:
 
+On your first visit, Professor offers a short guided tour. Use Next and Back to
+explore, or Skip tour to start immediately. Completion is remembered in this
+browser. Open the classroom menu and choose **Replay tutorial**
+to see it again. The tour uses no AI model calls.
+
 1. Click the classroom bookshelf to add your materials.
 2. Select the materials you want to study in the current session.
 3. Click Professor to open the chat. Try "Explain the main idea in these notes"
