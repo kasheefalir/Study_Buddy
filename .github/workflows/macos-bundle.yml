@@ -1,0 +1,52 @@
+name: Mac app bundle
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "packaging/macos/**"
+      - ".github/workflows/macos-bundle.yml"
+      - "app/desktop.py"
+permissions:
+  contents: read
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+            label: Apple-Silicon
+          - runner: macos-15-intel
+            arch: x64
+            label: Intel
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          architecture: ${{ matrix.arch }}
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt pyinstaller==6.16.0
+      - name: Test launcher
+        run: python -m pytest -q tests/test_desktop.py tests/test_launch.py
+      - name: Build app
+        run: python -m PyInstaller --noconfirm packaging/macos/StudyBuddy.spec
+      - name: Test bundled imports and assets
+        env:
+          BUDDY_DATA_DIR: ${{ runner.temp }}/buddy-smoke
+        run: '"dist/Study Buddy.app/Contents/MacOS/StudyBuddy" --smoke-test'
+      - name: Create disk image
+        run: |
+          mkdir -p dist/dmg
+          ditto "dist/Study Buddy.app" "dist/dmg/Study Buddy.app"
+          ln -s /Applications dist/dmg/Applications
+          hdiutil create -volname "Study Buddy" -srcfolder dist/dmg -ov -format UDZO "dist/StudyBuddy-Mac-${{ matrix.label }}.dmg"
+          hdiutil verify "dist/StudyBuddy-Mac-${{ matrix.label }}.dmg"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: StudyBuddy-Mac-${{ matrix.label }}
+          path: dist/*.dmg
+          if-no-files-found: error

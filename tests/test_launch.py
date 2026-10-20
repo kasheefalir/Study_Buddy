@@ -1,4 +1,9 @@
 from app import launch
+from dataclasses import replace
+
+
+def local_default(monkeypatch):
+    monkeypatch.setattr(launch, "settings", replace(launch.settings, ollama_model="llama3.2:3b"))
 
 
 class Process:
@@ -27,6 +32,7 @@ class PortProbe:
 
 
 def test_reuses_running_service_and_preloads_before_app(monkeypatch):
+    local_default(monkeypatch)
     calls = []
     monkeypatch.setattr(launch.sys, "argv", ["launch"])
     monkeypatch.setattr(launch.socket, "socket", PortProbe)
@@ -43,6 +49,7 @@ def test_reuses_running_service_and_preloads_before_app(monkeypatch):
 
 
 def test_missing_model_downloaded_before_preload(monkeypatch):
+    local_default(monkeypatch)
     calls = []
     monkeypatch.setattr(launch.sys, "argv", ["launch"])
     monkeypatch.setattr(launch.socket, "socket", PortProbe)

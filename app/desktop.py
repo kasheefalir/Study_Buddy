@@ -10,11 +10,52 @@ import threading
 import webbrowser
 
 
+def setup_cloud_default():
+    """Register the configured cloud model without sending study content or generating."""
+    from app.launch import has_model, ollama_request
+    from app.config import settings
+    model = settings.ollama_model
+    if not model.lower().endswith(("-cloud", ":cloud")):
+        return "Select or download your local model in the classroom."
+    try:
+        models = ollama_request("/api/tags").get("models", [])
+        if not has_model(models, model):
+            result = ollama_request("/api/pull", {"model": model, "stream": False}, timeout=120)
+            if result.get("error"):
+                raise RuntimeError(result["error"])
+        return "Cloud model configured. Sign in to Ollama to use it. Internet and cloud access required."
+    except Exception:
+        logging.exception("Cloud model setup failed")
+        return "Open Ollama and sign in, then click Retry model setup. You can also choose a local model in the classroom."
+
+
 def data_directory():
     override = os.environ.get("BUDDY_DATA_DIR")
     if override:
         return Path(override).expanduser().resolve()
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / "Study Buddy" / "data"
     return Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "Study Buddy" / "data"
+
+
+def acquire_lock(directory):
+    lock = (directory / "desktop.lock").open("a+b")
+    try:
+        if sys.platform == "win32":
+            import msvcrt
+            lock.seek(0)
+            if not lock.read(1):
+                lock.write(b"0")
+                lock.flush()
+            lock.seek(0)
+            msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        lock.close()
+        raise
+    return lock
 
 
 def bind_socket():
@@ -63,24 +104,14 @@ def main():
     from tkinter import messagebox, ttk
     root = tk.Tk()
     root.title("Study Buddy")
-    root.geometry("490x300")
-    root.minsize(440, 280)
-    lock = None
-    if sys.platform == "win32":
-        import msvcrt
-        lock = (directory / "desktop.lock").open("a+b")
-        lock.seek(0)
-        if not lock.read(1):
-            lock.write(b"0")
-            lock.flush()
-        lock.seek(0)
-        try:
-            msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
-        except OSError:
-            messagebox.showinfo("Study Buddy", "Study Buddy is already open. Use its launcher window to open the classroom.")
-            lock.close()
-            root.destroy()
-            return
+    root.geometry("490x440")
+    root.minsize(440, 420)
+    try:
+        lock = acquire_lock(directory)
+    except OSError:
+        messagebox.showinfo("Study Buddy", "Study Buddy is already open, or its data folder is unavailable. Check its launcher window and folder permissions.")
+        root.destroy()
+        return
     status = tk.StringVar(value="Starting your classroom...")
     frame = ttk.Frame(root, padding=24)
     frame.pack(fill="both", expand=True)
@@ -89,9 +120,30 @@ def main():
     classroom = ttk.Button(frame, text="Open classroom", state="disabled")
     classroom.pack(fill="x", pady=4)
     ttk.Button(frame, text="Get Ollama desktop app",
-               command=lambda: webbrowser.open("https://ollama.com/download/windows")).pack(fill="x", pady=4)
-    ttk.Label(frame, text="Open Ollama, then choose or download a model in the classroom.",
+               command=lambda: webbrowser.open("https://ollama.com/download/" + ("mac" if sys.platform == "darwin" else "windows"))).pack(fill="x", pady=4)
+    ttk.Label(frame, text="Mind in the clouds: chat and relevant material excerpts are sent to Ollama cloud when you study with a cloud model.",
               wraplength=420).pack(anchor="w", pady=8)
+    setup_status = tk.StringVar(value="Setting up the default model...")
+    ttk.Label(frame, textvariable=setup_status, wraplength=420).pack(anchor="w", pady=4)
+    import queue
+    setup_results = queue.Queue()
+
+    def start_setup():
+        setup_button.configure(state="disabled")
+        setup_status.set("Setting up the default model...")
+        threading.Thread(target=lambda: setup_results.put(setup_cloud_default()), daemon=True).start()
+        root.after(100, check_setup)
+
+    def check_setup():
+        try:
+            setup_status.set(setup_results.get_nowait())
+            setup_button.configure(state="normal")
+        except queue.Empty:
+            root.after(100, check_setup)
+
+    setup_button = ttk.Button(frame, text="Retry model setup", command=start_setup)
+    setup_button.pack(fill="x", pady=4)
+    root.after(200, start_setup)
     server = None
     sock = None
     worker = None

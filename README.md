@@ -5,6 +5,9 @@ with an AI tutor called **Professor**. Bring your notes, slides, or textbook PDF
 then ask questions, get explanations, or practice with a quiz. It opens in your
 web browser, with a small interactive classroom as your starting point.
 
+**Looking for the app download? Go to [Download the App](#download-the-app-no-python-or-terminal).**
+GitHub's green **Code > Download ZIP** button downloads source code, not the installer.
+
 ## What You Can Do
 
 - **Study your own materials.** Add PDFs, Word documents, PowerPoint slides, text
@@ -17,8 +20,8 @@ web browser, with a small interactive classroom as your starting point.
   questions before moving on. Review your missed answers afterward.
 - **Keep your study sessions organized.** Group materials by class or topic,
   return to saved conversations, and bookmark useful explanations.
-- **Choose your AI model.** Switch between installed Llama 3.2, Phi-4 Mini, and
-  GPT-OSS 20B models in the app. Larger models need more computer memory.
+- **Choose your AI model.** Start with Gemma cloud, or switch to a local model
+  such as Llama 3.2, Phi-4 Mini, or GPT-OSS 20B. Larger local models need more memory.
 
 ## Your First Study Session
 
@@ -42,7 +45,9 @@ question; answer explanations still take time to generate.
 
 ## Where Your Work Lives
 
-With the local models described in this guide, AI responses are generated on
+The default Gemma cloud model sends chat and relevant material excerpts to
+Ollama cloud and requires internet and account access. With optional local models,
+AI responses are generated on
 your computer through **Ollama**, the software that runs the AI models. Your
 uploaded materials and study conversations are stored locally rather than in a
 Study Buddy cloud account. Bookmarked explanations are saved in your browser.
@@ -67,15 +72,51 @@ models as well.
 The sections below explain installation and provide technical details for people
 who want to configure or contribute to the app.
 
-## Setup
+## Download the App (No Python or Terminal)
+
+**Choose this option for the simplest setup. Do not follow the source-install
+commands below if you use an installer.** Python and app dependencies are bundled;
+Ollama is a separate desktop app.
+
+| Computer | App download |
+| --- | --- |
+| Windows x64 | [Download Windows installer preview](https://github.com/kasheefalir/Study_Buddy/actions/runs/39475990583/artifacts/12288803742) |
+| Mac with Apple Silicon (M-series chip) | [Mac app builds: choose Apple-Silicon artifact](https://github.com/kasheefalir/Study_Buddy/actions/workflows/macos-bundle.yml) |
+| Mac with Intel processor | [Mac app builds: choose Intel artifact](https://github.com/kasheefalir/Study_Buddy/actions/workflows/macos-bundle.yml) |
+
+These preview downloads are GitHub Actions artifacts: sign in to GitHub if asked.
+For a build page, open the latest successful run and find **Artifacts** at the
+bottom. Download the matching artifact and extract its ZIP.
+
+- **Windows:** run `StudyBuddy-Windows-Setup.exe`, then open Study Buddy from Start.
+- **Mac:** open the `.dmg`, drag **Study Buddy** into **Applications**, then open it.
+  The Mac preview targets **macOS 15 or newer**. Check Apple menu > About This Mac
+  to identify the chip and macOS version.
+- Install/open [Ollama for Mac](https://ollama.com/download/mac) or
+  [Ollama for Windows](https://ollama.com/download/windows), and sign in.
+  The updated launcher sets up Gemma cloud automatically. Click **Retry model setup**
+  if Ollama was not available yet. Cloud access and service limits still apply.
+- Keep the launcher open while studying. Use **Quit Study Buddy** when finished.
+
+The previews are not publisher-signed or Apple-notarized. Your OS may warn or block
+launch; school-managed devices may require IT approval. Do not disable security
+protections. See [Apple's guidance](https://support.apple.com/102445).
+Build artifacts expire; these are preview downloads, not permanent release links.
+See [Mac bundle details](docs/macos-bundle.md) and
+[Windows installer details](docs/windows-installer.md) for test status.
+
+## Install From Source (GitHub ZIP or Git + Terminal)
 
 Choose **[Mac](#mac-first-time-setup)** or **[Windows](#windows-first-time-setup)**.
 Each section includes everything: Python (runs the app), Ollama (runs the AI),
-and Study Buddy itself. No coding experience is needed. This is a guided setup,
-not yet a one-click installer. Linux does not yet have a tested beginner setup guide.
+and Study Buddy itself. **This is a separate, manual alternative to the app downloads
+above**, intended for running or editing the source code.
+Linux does not yet have a tested beginner setup guide.
 
-Keep internet connected and allow several gigabytes of free disk space; the
-default AI model alone is about 2 GB. Installation can take several minutes.
+Keep internet connected. The default is **Gemma 4 31B Cloud**, which requires
+Ollama sign-in and cloud access rather than a large local model download.
+Chat and relevant material excerpts are sent to Ollama cloud when using it.
+Local models remain optional and need additional disk space and RAM.
 Paste each numbered step's code into the specified terminal, press Enter, and
 wait for it to finish. **Stop if a command fails.** Do not paste the next step
 until the error is resolved. Installers may ask for permission or a password.
@@ -114,7 +155,7 @@ bash start-mac.command
 
 5. Leave Terminal open. Wait for the server address, then open
    **http://127.0.0.1:8000** in your browser (or the address printed in Terminal).
-   First startup downloads the default AI model if needed.
+   First startup sets up the default cloud model if needed. Sign in to Ollama before chatting.
    Next time, open a fresh Terminal and type **`study buddy`** from any folder.
 
 If you renamed the extracted folder, type `cd `, drag the folder from Finder
@@ -183,7 +224,7 @@ winget install --id Python.Python.3.13 --exact --source winget
 
 5. Leave PowerShell open. Wait for the server address, then open
    **http://127.0.0.1:8000** in your browser (or the address printed in PowerShell).
-   First startup downloads the default AI model if needed.
+   First startup sets up the default cloud model if needed. Sign in to Ollama before chatting.
    Next time, open a fresh terminal and type **`study buddy`** from any folder.
    If Windows still cannot find `study`, sign out and back in once.
 
@@ -226,12 +267,12 @@ If `.venv` is missing, follow the first-time setup for your operating system.
 
 ### Open the App and Start Studying
 
-1. Leave the terminal window open. The launcher starts Ollama if necessary,
-   downloads the default model if missing, and loads Professor. A model download
-   may sit at the download message without showing a percentage; it can take
-   several minutes or longer.
-2. Wait for `Professor is loaded` and then `Uvicorn running on
-   http://127.0.0.1:8000`. The second message confirms the web server has started.
+1. Leave the terminal window open. The launcher starts Ollama if necessary and
+   sets up the default cloud model. Sign in through Ollama before chatting.
+   Cloud use requires internet and account access; service limits may apply.
+   An explicitly configured local model is downloaded and loaded instead.
+2. Wait for `Uvicorn running on http://127.0.0.1:8000`.
+   This confirms the web server has started.
 3. Open [Study Buddy](http://127.0.0.1:8000) in your browser. This address points
    to your own computer, not a public website. The browser may not open automatically.
 4. Click the bookshelf, import a material, and wait until it is ready. The first

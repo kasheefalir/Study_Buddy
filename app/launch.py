@@ -94,11 +94,14 @@ def main():
             result = ollama_request("/api/pull", {"model": model, "stream": False}, timeout=3600)
             if result.get("error"):
                 raise RuntimeError(result["error"])
-        print(f"Loading Professor ({model})...", flush=True)
-        result = ollama_request("/api/generate", {"model": model, "stream": False, "keep_alive": "30m"}, timeout=300)
-        if result.get("error"):
-            raise RuntimeError(result["error"])
-        print(f"Professor is loaded. Open http://127.0.0.1:{port}\nPress Ctrl+C to stop Study Buddy.", flush=True)
+        if model.lower().endswith(("-cloud", ":cloud")):
+            print("Cloud model configured. Sign in to Ollama to chat. Chat and relevant material excerpts are sent to Ollama cloud.", flush=True)
+        else:
+            print(f"Loading Professor ({model})...", flush=True)
+            result = ollama_request("/api/generate", {"model": model, "stream": False, "keep_alive": "30m"}, timeout=300)
+            if result.get("error"):
+                raise RuntimeError(result["error"])
+        print(f"Open http://127.0.0.1:{port}\nPress Ctrl+C to stop Study Buddy.", flush=True)
         server = subprocess.Popen([sys.executable, "-m", "uvicorn", "app.main:app",
                                    "--host", "127.0.0.1", "--port", str(port), *arguments])
         return server.wait()

@@ -17,7 +17,10 @@ Interactive clean-machine acceptance testing is still pending.
 1. Download `StudyBuddy-Windows-Setup.exe` from the Windows installer build artifact.
 2. Run it, then open Study Buddy from the Start menu or desktop shortcut.
 3. Use **Get Ollama desktop app** if Ollama is missing. Install and open Ollama.
-4. In the classroom's model menu, select an available model or download one.
+4. The updated launcher automatically sets up Gemma 4 31B Cloud. Sign in to
+   Ollama; if setup failed before Ollama was available, click **Retry model setup**.
+   Cloud chat sends your messages and relevant material excerpts to Ollama cloud.
+   Local models remain available in the classroom's model menu.
 5. Keep the launcher window open. **Quit Study Buddy** stops this app's server,
    not Ollama.
 
@@ -56,3 +59,6 @@ first launch, Ollama installation/detection, model download, file import, chat,
 quiz, closing/reopening, occupied port, second launch, upgrade, and uninstall with
 saved data retained. CI smoke tests are not a substitute for that walkthrough.
 Code signing and a reproducibly locked dependency set remain release work.
+
+The automatic cloud setup change is newer than the first linked build and needs
+a new Windows build before distribution.

@@ -80,7 +80,7 @@ const modelReliability = {
 };
 const professorModels = Object.keys(modelLabels);
 let professorModel = localStorage.getItem("buddy-professor-model");
-if (!professorModel) professorModel = professorModels[0];
+if (!professorModel) professorModel = "gemma4:31b-cloud";
 if (!professorModels.includes(professorModel)) {
   const option = document.createElement("option");
   option.value = professorModel; option.textContent = professorModel;
