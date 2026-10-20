@@ -12,7 +12,7 @@ web browser, with a small interactive classroom as your starting point.
 - **Ask Professor for help.** Ask a specific question, request a simpler
   explanation, or ask for a summary. You can open the source passages used in a
   material-based answer to check them yourself.
-- **Practice with quizzes.** Choose a quiz length or use the default of ten
+- **Practice with quizzes.** Choose a quiz length or use the default of five
   questions. Answer one question at a time, read the feedback, and ask follow-up
   questions before moving on. Review your missed answers afterward.
 - **Keep your study sessions organized.** Group materials by class or topic,
@@ -62,115 +62,172 @@ models as well.
 The sections below explain installation and provide technical details for people
 who want to configure or contribute to the app.
 
-## Required Downloads
-
-This is a guided setup, not yet a one-click installer. You do not need to know
-how to code, but you will use a terminal: a window where you enter commands.
-Keep an internet connection available for the first setup and model downloads.
-
-1. Install [Python](https://www.python.org/downloads/) version 3.11 or newer for
-   your operating system. Python runs the app. On Windows, enable **Add Python
-   to PATH** if the installer offers it, so commands can find Python.
-2. Install [Ollama](https://ollama.com/download) for your operating system and
-   open it once. Ollama runs the AI models. It is a separate application, not a
-   Python package. Check its download page for current system requirements.
-3. Download Study Buddy as described below. The setup commands install its
-   supporting Python packages. The launcher downloads the default AI model,
-   `llama3.2:3b`, automatically if it is missing.
-
-Allow several gigabytes of free disk space for the app, models, and your materials.
-The default model alone is approximately 2 GB. Downloads and the first startup
-can take several minutes or longer, depending on your connection and computer.
-
 ## Setup
 
-### Download Study Buddy
+Choose **[Mac](#mac-first-time-setup)** or **[Windows](#windows-first-time-setup)**.
+Each section includes everything: Python (runs the app), Ollama (runs the AI),
+and Study Buddy itself. No coding experience is needed. This is a guided setup,
+not yet a one-click installer. Linux does not yet have a tested beginner setup guide.
 
-1. Open the [Study Buddy repository](https://github.com/kasheefalir/Study_Buddy).
-2. Click the green **Code** button, then **Download ZIP**. You do not need Git.
-3. Extract the ZIP: on Mac, double-click it; on Windows, right-click it and choose
-   **Extract All**. Do not run the app from inside the ZIP.
-4. Move the extracted folder somewhere you can keep it, such as Documents.
-   Open it and locate `requirements.txt`, `start-mac.command`, and
-   `start-windows.bat`. This is your **project folder**; its name may be
-   `Study_Buddy-main`. Keep this folder because it will also hold your saved data.
-
-Follow only the section for your computer. Run commands one line at a time,
-pressing Enter after each. Wait for a command to finish before running the next;
-stop and check Troubleshooting if you see an error.
+Keep internet connected and allow several gigabytes of free disk space; the
+default AI model alone is about 2 GB. Installation can take several minutes.
+Paste each numbered step's code into the specified terminal, press Enter, and
+wait for it to finish. **Stop if a command fails.** Do not paste the next step
+until the error is resolved. Installers may ask for permission or a password.
+Use these download steps for a **new installation**, not to overwrite an existing
+Study Buddy folder or its saved data.
 
 ### Mac: First-Time Setup
 
-1. Install Python and Ollama from Required Downloads, then open a new **Terminal**
-   window (find Terminal using Spotlight).
-2. Type `cd` followed by a space, drag your extracted project folder from Finder
-   into Terminal, and press Enter. This tells Terminal which folder to work in.
-3. Check Python, then create the app's private Python environment and install its
-   supporting packages:
+1. Open **Terminal** using Spotlight. Install [Homebrew](https://brew.sh), which
+   downloads the other tools for you. Skip this command if Homebrew is already
+   installed. This runs Homebrew's official installer; read its prompts and
+   approve installation only if you trust it. Password typing may be invisible.
 
 ```bash
-python3 --version
-python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 ```
 
-The version should be 3.11 or newer. The hidden `.venv` folder keeps Study Buddy's
-packages separate from other Python programs on your computer.
-
-4. Register the `study buddy` command once, from the same Terminal window:
+2. Make Homebrew available in this Terminal, then install **Python, Ollama, and
+   Git** together. This handles standard Apple Silicon and Intel Homebrew paths.
+   Follow Homebrew's printed **Next steps** to make its PATH setting permanent.
 
 ```bash
-.venv/bin/python -m app.install_command
+if [ -x /opt/homebrew/bin/brew ]; then
+  eval "$(/opt/homebrew/bin/brew shellenv)"
+elif [ -x /usr/local/bin/brew ]; then
+  eval "$(/usr/local/bin/brew shellenv)"
+fi
+brew install python@3.13 ollama git
 ```
 
-5. Quit Terminal and reopen it, then type this from any folder:
+This installs Ollama's command-line runtime; its separate desktop app is not
+required. Study Buddy starts the service when needed. Check the current
+[Homebrew requirements](https://docs.brew.sh/Installation) if installation fails
+on an older Mac; the manual alternative below avoids Homebrew.
+
+3. Download Study Buddy into a new **Study_Buddy** folder on your Desktop:
 
 ```bash
-study buddy
+cd "$HOME/Desktop" && git clone https://github.com/kasheefalir/Study_Buddy.git && cd Study_Buddy
 ```
 
-Registration creates a launcher in your user's `.local/bin` folder and adds
-that folder to your zsh or bash settings. It does not need `sudo` or an
-administrator password. Other Mac shells can still use `bash start-mac.command`
-from the project folder.
+If `Study_Buddy` already exists, stop; do not delete it to make this command work.
+For an existing installation, use [Already Have Study Buddy Installed?](#already-have-study-buddy-installed).
+
+4. In that same Terminal, install the app's packages, register the shortcut,
+   and start the app. The `&&` joins stop this step if an earlier command fails.
+
+```bash
+python3.13 -m venv .venv &&
+.venv/bin/python -m pip install -r requirements.txt &&
+.venv/bin/python -m app.install_command &&
+bash start-mac.command
+```
+
+5. Leave Terminal open. Wait for the server address, then open
+   **http://127.0.0.1:8000** in your browser (or the address printed in Terminal).
+   First startup downloads the default `llama3.2:3b` model if needed.
+   Next time, open a fresh Terminal and type **`study buddy`** from any folder.
+
+**Prefer manual downloads on Mac?** Install [Python 3.11 or newer for macOS](https://www.python.org/downloads/macos/)
+and [Ollama for macOS](https://ollama.com/download/mac), then open Ollama once.
+On [GitHub](https://github.com/kasheefalir/Study_Buddy), choose **Code > Download ZIP**.
+Double-click the ZIP and move the extracted `Study_Buddy-main` folder to Desktop.
+Open a new Terminal and run this instead of steps 1-4; Git and Homebrew are not needed:
+
+```bash
+cd "$HOME/Desktop/Study_Buddy-main" &&
+python3 --version &&
+python3 -m venv .venv &&
+.venv/bin/python -m pip install -r requirements.txt &&
+.venv/bin/python -m app.install_command &&
+bash start-mac.command
+```
+
+The printed Python version must be 3.11 or newer. If you renamed the folder,
+type `cd `, drag the folder from Finder into Terminal, and press Enter instead
+of the first line. The remaining commands run inside that folder.
 
 ### Windows: First-Time Setup
 
-1. Install Python and Ollama from Required Downloads.
-2. Open your extracted project folder in **File Explorer**. Click the address
-   bar, type `cmd`, and press Enter. This opens **Command Prompt** in the correct
-   folder. These commands are for Command Prompt, not PowerShell.
-3. Check Python, then create the app's private Python environment and install its
-   supporting packages:
+1. Open **PowerShell** from Start (not Command Prompt). Install **Python, Ollama,
+   and Git** using Windows Package Manager. Run these commands one at a time,
+   waiting for each installer to finish and accepting its prompts:
 
-```bat
-python --version
-python -m venv .venv
-.venv\Scripts\python.exe -m pip install -r requirements.txt
+```powershell
+winget install --id Python.Python.3.13 --exact --source winget
+winget install --id Ollama.Ollama --exact --source winget
+winget install --id Git.Git --exact --source winget
 ```
 
-The version should be 3.11 or newer. If `python` is not recognized but
-`py --version` works, use `py -m venv .venv` for the second command instead.
-The remaining commands use the environment's Python directly; activation is
-not required.
+If `winget` is not recognized, install or update **App Installer** from Microsoft
+Store, or use the manual alternative below. See Microsoft's
+[WinGet instructions](https://learn.microsoft.com/en-us/windows/package-manager/winget/install).
 
-4. Register the `study buddy` command once, from the same Command Prompt window:
+2. **Close your terminal application completely, then reopen PowerShell.** This
+   lets Windows find the newly installed commands. Open **Ollama** from Start.
+   Check that the commands are available:
 
-```bat
-.venv\Scripts\python.exe -m app.install_command
+```powershell
+py -3.13 --version
+ollama --version
+git --version
 ```
 
-5. Close your terminal application completely (including Windows Terminal if
-   you use it), then open a new Command Prompt or PowerShell window and type:
+3. Download and set up Study Buddy on your Desktop. This finds the real Desktop
+   location, including when Windows has moved it into OneDrive. It refuses to
+   overwrite an existing `Study_Buddy` folder and stops on command failures.
 
-```text
-study buddy
+```powershell
+& {
+    $ErrorActionPreference = "Stop"
+    Set-Location ([Environment]::GetFolderPath("Desktop"))
+    if (Test-Path "Study_Buddy") { throw "Study_Buddy already exists. Use your existing folder; do not overwrite it." }
+    git clone https://github.com/kasheefalir/Study_Buddy.git
+    if ($LASTEXITCODE -ne 0) { throw "Download failed." }
+    Set-Location "Study_Buddy"
+    py -3.13 -m venv .venv
+    if ($LASTEXITCODE -ne 0) { throw "Python setup failed." }
+    .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+    if ($LASTEXITCODE -ne 0) { throw "Package installation failed." }
+    .\.venv\Scripts\python.exe -m app.install_command
+    if ($LASTEXITCODE -ne 0) { throw "Shortcut registration failed." }
+    .\start-windows.bat
+}
 ```
 
-This now works from any folder. Registration puts `study.cmd` in
-`%LOCALAPPDATA%\StudyBuddy\bin` and adds that directory to your user PATH, the
-list of folders Windows searches for commands. It does not need administrator
-access. If a fresh terminal still cannot find it, sign out of Windows and back in.
+4. Leave PowerShell open. Wait for the server address, then open
+   **http://127.0.0.1:8000** in your browser (or the address printed in PowerShell).
+   First startup downloads the default `llama3.2:3b` model if needed.
+   Next time, open a fresh terminal and type **`study buddy`** from any folder.
+   If Windows still cannot find `study`, sign out and back in once.
+
+**Prefer manual downloads on Windows?** Install [Python for Windows](https://www.python.org/downloads/windows/)
+(3.11 or newer; enable **Add Python to PATH** when offered) and
+[Ollama for Windows](https://ollama.com/download/windows). Open Ollama once.
+On [GitHub](https://github.com/kasheefalir/Study_Buddy), choose **Code > Download ZIP**,
+then right-click the ZIP and choose **Extract All**. Move the extracted
+`Study_Buddy-main` folder to Desktop. Do not run from inside the ZIP.
+Open a new **PowerShell** and paste this instead of steps 1-3; Git is not needed:
+
+```powershell
+& {
+    $ErrorActionPreference = "Stop"
+    Set-Location (Join-Path ([Environment]::GetFolderPath("Desktop")) "Study_Buddy-main")
+    python -m venv .venv
+    if ($LASTEXITCODE -ne 0) { throw "Python setup failed. Check Python installation and PATH." }
+    .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+    if ($LASTEXITCODE -ne 0) { throw "Package installation failed." }
+    .\.venv\Scripts\python.exe -m app.install_command
+    if ($LASTEXITCODE -ne 0) { throw "Shortcut registration failed." }
+    .\start-windows.bat
+}
+```
+
+If `python` opens the Store or is not found, try `py -m venv .venv` in place of
+`python -m venv .venv` after confirming `py --version` reports 3.11 or newer.
+No PowerShell execution-policy changes or environment activation are required.
 
 ### Already Have Study Buddy Installed?
 
@@ -378,7 +435,7 @@ over the session's batch only. Tool decisions and returned passages are stored
 in `data/study-reviews`. No arbitrary URLs, code execution or cross-session
 material access is permitted through these operations.
 
-Quizzes default to ten multiple-choice questions; explicit totals (1-50, including natural-language
+Quizzes default to five multiple-choice questions; explicit totals (1-50, including natural-language
 requests) override the default. "One question at a time" does not mean one total.
 Completed study overviews supply chapter-level concepts and original passages
 for quizzes. Until an overview is ready, material text is divided into overlapping
