@@ -11,6 +11,40 @@ function tokenNumber(value) {
   return Number.isInteger(value) ? value.toLocaleString() : "unavailable";
 }
 
+function linkSourceCitations(body, details, passages) {
+  const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  for (const node of nodes) {
+    if (node.parentElement.closest("pre, code, button, a")) continue;
+    const matches = [...node.textContent.matchAll(/\[(S\d+)\]/g)];
+    if (!matches.some(match => passages.has(match[1]))) continue;
+    const fragment = document.createDocumentFragment();
+    let offset = 0;
+    for (const match of matches) {
+      fragment.append(document.createTextNode(node.textContent.slice(offset, match.index)));
+      const target = passages.get(match[1]);
+      if (target) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "source-citation";
+        button.textContent = match[0];
+        button.setAttribute("aria-label", "Read source " + match[1]);
+        button.title = "Read source " + match[1];
+        button.onclick = () => {
+          details.open = true;
+          target.scrollIntoView({block: "nearest"});
+          target.focus({preventScroll: true});
+        };
+        fragment.append(button);
+      } else fragment.append(document.createTextNode(match[0]));
+      offset = match.index + match[0].length;
+    }
+    fragment.append(document.createTextNode(node.textContent.slice(offset)));
+    node.replaceWith(fragment);
+  }
+}
+
 function updateTokenUsage() {
   const replies = conversationMessages.filter(m => m.role === "assistant");
   const tracked = replies.filter(m => Number.isInteger(m.usage?.input_tokens) && Number.isInteger(m.usage?.output_tokens));

@@ -229,7 +229,7 @@ def test_count_override_persistence_feedback_review_and_completion(tmp_path):
     assert text.startswith("**Correct**") and "1 of 2 correct" in text
     calls = len(model.calls)
     _, text = asyncio.run(agent.reply("Next question", session, document_ids=[identifier], materials_root=tmp_path / "documents"))
-    assert "Quiz complete" in text and len(model.calls) == calls + 1
+    assert "Quiz complete" in text and len(model.calls) == calls
     assert len(store.quiz(session)["window_reviews"]) == 2
     assert task_for("Review missed answers", "auto", store.quiz(session)) == "quiz"
 

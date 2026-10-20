@@ -185,7 +185,7 @@ def test_checker_schema_prompt_is_model_scoped(model_name):
         model = model_name
 
         async def structured_plan(self, messages, schema):
-            assert ("JSON schema:" in messages[0]["content"]) == (model_name != "gpt-oss:20b")
+            assert "JSON schema:" not in messages[0]["content"]
             assert schema == check_schema_for(1)
             return '{"checks":{"0":{"supported":true,"reason":"Same meaning"}}}'
 
@@ -221,7 +221,7 @@ def test_batch_preserves_rejections_and_falls_back(malformed, model_name):
 
         async def structured_plan(self, messages, schema):
             self.calls += 1
-            assert ("JSON schema:" in messages[0]["content"]) == (model_name != "gpt-oss:20b")
+            assert "JSON schema:" not in messages[0]["content"]
             if self.calls == 1:
                 return ('{"checks":{"0":{"supported":true}}}' if malformed else
                         '{"checks":{"0":{"supported":true},"1":{"supported":false}}}')

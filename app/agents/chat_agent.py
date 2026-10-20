@@ -10,7 +10,7 @@ from app.rag.library import ground
 from app.llm.usage import track_usage, usage_stage, summarize
 from app.agents.tasks import PROMPTS, task_for, task_prompt
 from app.agents.study_tools import review_materials, structured, IntentRoute, IntentDecision
-from app.agents.quiz import quiz_turn, public_question, selected_option, REVIEW, START, NEXT, CHANGE
+from app.agents.quiz import quiz_turn, public_question, selected_option, completion, REVIEW, START, NEXT, CHANGE
 from app.agents.context_budget import pack, compress, model_budget
 from app.agents.reflection import reflect
 from app.agents.grounded_answer import answer_from_sources
@@ -70,6 +70,13 @@ class ChatAgent:
         notes = self.conversations.memory(active_id)
         summary_state = self.conversations.summary(active_id)
         saved_quiz = self.conversations.quiz(active_id)
+        # Completion is saved state, not an intent the model may reinterpret.
+        if saved_quiz.get("version") and saved_quiz.get("phase") == "complete" and NEXT.fullmatch(message):
+            response = completion(saved_quiz)
+            self.conversations.save(active_id, [*history, {"role": "user", "content": message},
+                {"role": "assistant", "content": response, "usage": summarize(calls)}],
+                document_ids=session_document_ids, quiz=saved_quiz)
+            return active_id, response
         quiz = dict(saved_quiz) if materials_root is not None else quiz_state(message, saved_quiz)
         mode = (task if task != "auto" else "chat") if materials_root is not None else task_for(message, task, quiz)
         review_request = bool(REVIEW.search(message)) if materials_root is None else False

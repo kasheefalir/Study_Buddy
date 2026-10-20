@@ -12,6 +12,7 @@ from app.agents.context_budget import estimate, input_limit
 from app.agents.activity import preparing_question
 from app.agents.study_tools import OUTPUTS, library, passages, structured, structured_messages, StudyResponseError
 from app.rag.library import candidates
+from app.errors import StudyError
 
 
 class QuizRequest(BaseModel):
@@ -242,7 +243,7 @@ async def bounded(llm, stage, prompt, data, sources):
     data = {**data, "sources": []}
     base = estimate(structured_messages(stage, prompt, data))
     if base > input_limit() - 128:
-        raise ValueError("This quiz answer or request is too long for the context window. Please shorten it.")
+        raise StudyError("This quiz answer or request is too long for the context window. Please shorten it.", "context_limit")
     used = []
     # Compact metadata is enough for the model; full citation metadata stays on disk.
     for source in sources:
@@ -252,7 +253,7 @@ async def bounded(llm, stage, prompt, data, sources):
             data = proposed
             used.append(source)
     if sources and not used:
-        raise ValueError("Not enough context space for a quiz passage. Increase CONTEXT_WINDOW or shorten your answer.")
+        raise StudyError("Not enough context space for a quiz passage. Increase CONTEXT_WINDOW or shorten your answer.", "context_limit")
     result = await structured(llm, stage, prompt, data)
     return result, used
 
@@ -381,14 +382,18 @@ def question_text(quiz):
     return f'**Question {quiz["cursor"] + 1} of {quiz["total"]}**\n\n{quiz["pending_question"]}{options}'
 
 
-async def quiz_turn(root, identifiers, message, quiz, llm, recent=None, activity_action=None, *, prepare_all=True):
+async def quiz_turn(root, identifiers, message, quiz, llm, recent=None, activity_action=None, *, prepare_all=True, batch_size=None):
+    if batch_size is not None and (type(batch_size) is not int or batch_size < 1):
+        raise ValueError("Quiz batch size must be a positive integer.")
     response, state, sources = await _quiz_turn(root, identifiers, message, quiz, llm, recent, activity_action)
-    if not prepare_all:
+    if not prepare_all or batch_size == 1:
         return response, state, sources
     if (response is None or state.get("phase") != "question" or not state.get("pending_question")
             or state.get("question_id") == quiz.get("question_id")):
         return response, state, sources
-    if len(state.get("prepared_questions", [])) == state["total"]:
+    bank = state.get("prepared_questions", [])
+    # Playback of an already prepared question must not trigger another batch.
+    if state["cursor"] < len(bank) and bank[state["cursor"]]:
         return response, state, sources
     # Build on a private copy; failed preparation never commits a partial quiz.
     current = deepcopy(state)
@@ -397,7 +402,8 @@ async def quiz_turn(root, identifiers, message, quiz, llm, recent=None, activity
         bank[index] = item
     bank[state["cursor"]] = {key: deepcopy(state.get(key)) for key in QUESTION_FIELDS}
     state["prepared_questions"] = bank
-    for index in range(state["cursor"] + 1, state["total"]):
+    stop = min(state["total"], state["cursor"] + batch_size) if batch_size else state["total"]
+    for index in range(state["cursor"] + 1, stop):
         state.update(cursor=index, phase="question", pending_question="")
         with preparing_question(index + 1, state["total"]):
             _, state, _ = await _quiz_turn(root, identifiers, "Next question", state, llm, recent, "next")
@@ -488,7 +494,7 @@ async def _quiz_turn(root, identifiers, message, quiz, llm, recent=None, activit
         total = count if count is not None else intent["count"]
         available = coverage_windows(root, books, intent["focus"])
         if identifiers and not available:
-            raise ValueError("No readable passages are available for this quiz.")
+            raise StudyError("No readable passages are available for this quiz.", "no_evidence")
         seed = uuid4().hex
         window_plan = select_windows(available, total) if available else []
         if len(window_plan) > 1:
@@ -567,7 +573,9 @@ async def _quiz_turn(root, identifiers, message, quiz, llm, recent=None, activit
             if not repair:
                 break
         if repair:
-            raise ValueError(f"Professor could not form a valid multiple-choice question {cursor + 1} of {quiz['total']} after retrying. Quiz progress was not saved. Try a shorter quiz or switch models.")
+            raise StudyError(f"My brain hit a snag preparing question {cursor + 1} of {quiz['total']}. "
+                             "I couldn't make a reliable question after retrying. Your saved quiz progress is unchanged. "
+                            "Try fewer questions or a larger model. Bigger models can still make mistakes.", "quiz_generation")
         # Reference links come from the exact bounded input, never model-authored IDs.
         quiz.update(pending_question=data["question"], expected_answer=data["expected_answer"], sources=sources,
                     question_id=uuid4().hex)
@@ -628,7 +636,7 @@ async def _quiz_turn(root, identifiers, message, quiz, llm, recent=None, activit
          "selection_is_correct": choice_answer == quiz.get("correct_index") if choice_answer is not None else None}, quiz["sources"])
         verdict = "hint" if hint else data["verdict"]
     if verdict == "incorrect" and not feedback_fallback and not all(data[k].strip() for k in ("correction", "example")):
-        raise ValueError("Professor could not complete the concept review. Please retry your answer.")
+        raise StudyError("Professor could not complete the concept review. Please retry your answer.", "quiz_feedback")
     heading = {"correct": "Correct", "incorrect": "Incorrect", "hint": "Hint", "uncertain": "Please clarify"}[verdict]
     review = "\n\n".join(data[k].strip() for k in ("explanation", "correction", "example") if data[k].strip()) if verdict == "incorrect" else data["explanation"]
     response = f'**{heading}**\n\n{review}'

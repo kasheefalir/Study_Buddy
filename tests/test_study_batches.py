@@ -82,7 +82,7 @@ def test_quiz_coverage_feedback_and_next_step(tmp_path):
 def test_invalid_coverage_and_unready_files_fail_explicitly(tmp_path):
     identifier = "a" * 32
     material(tmp_path, identifier, "Stats")
-    with pytest.raises(ValueError, match="valid multiple-choice question"):
+    with pytest.raises(ValueError, match="My brain hit a snag.*saved quiz progress is unchanged"):
         asyncio.run(quiz_turn(tmp_path, [identifier], "quiz", {}, Model([
             {"count": 5, "focus": ""}] + [{"summary": "Fake", "question": "", "expected_answer": "Unknown source explanation"}] * 3)))
     write_json(tmp_path / (identifier + ".json"), {"id": identifier, "name": "Stats", "status": "Processing"})

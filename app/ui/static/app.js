@@ -66,14 +66,26 @@ function isCloudModel(model) {
   return /(?:-|:)cloud$/i.test(model || "");
 }
 function updateModelRamGuidance() {
+  const reliability = $("#model-reliability-note");
+  if (reliability) reliability.textContent = modelReliability[professorModel] || "No current demo result recorded for this model. Treat it as untested in this workflow.";
   $("#model-ram-guidance").textContent = (isCloudModel(professorModel) ? "Cloud: " : "System RAM (estimate): ") + (modelRamGuidance[professorModel] || (isCloudModel(professorModel) ? "Runs remotely through Ollama cloud. Internet and account access required." : "Not yet measured."));
   $("#privacy-note").textContent = isCloudModel(professorModel)
     ? "Mind in the clouds: your chat and relevant material excerpts are sent to Ollama cloud."
     : "Your own quiet corner. Saved on this device.";
 }
+const modelReliability = {
+  "phi4-mini:latest": "October 20 pilot: the initial explanation was useful, but a five-question quiz failed during preparation. Follow-up attribution and misleading premises still need care. One run, not an accuracy rating.",
+  "gpt-oss:20b": "October 20 pilot: completed five questions, but missed the requested labeled example. A post-completion restart bug was found and fixed in code. One run, not an accuracy rating.",
+  "gemma4:31b-cloud": "October 20 pilot: completed five questions and preserved missed-answer review. The requested example was weak, and quiz explanations added details beyond the notes. One run, not an accuracy rating.",
+};
 const professorModels = Object.keys(modelLabels);
 let professorModel = localStorage.getItem("buddy-professor-model");
-if (!professorModels.includes(professorModel)) professorModel = professorModels[0];
+if (!professorModel) professorModel = professorModels[0];
+if (!professorModels.includes(professorModel)) {
+  const option = document.createElement("option");
+  option.value = professorModel; option.textContent = professorModel;
+  $("#professor-model").append(option);
+}
 $("#professor-model").value = professorModel;
 updateModelRamGuidance();
 $("#professor-model").onchange = async () => {
@@ -285,11 +297,36 @@ document.querySelectorAll("[data-open]").forEach((button) => button.addEventList
 document.querySelectorAll(".session-actions [data-open]").forEach((button) => button.addEventListener("click", () => button.closest("details")?.removeAttribute("open")));
 document.querySelectorAll(".close").forEach((button) => button.addEventListener("click", () => button.closest("dialog").close()));
 
+const failureMessages = {
+  ollama_offline: "Professor can't reach Ollama. Open the Ollama app, then retry.",
+  model_missing: "This model isn't available in Ollama. Download it from the model menu or choose an available model.",
+  model_access: "This model needs access. Check your Ollama sign-in and model permissions, then retry.",
+  rate_limit: "Professor needs a short breather: the model service is limiting requests. Wait a little, then retry.",
+  model_service: "The model service couldn't finish this request. Check Ollama; for cloud models, check your internet connection too.",
+  model_timeout: "Professor ran out of waiting time. Retry with a shorter request or choose a faster model.",
+  context_limit: "That's more than Professor can read at once. Select fewer materials or ask about a smaller section.",
+  output_limit: "Professor ran out of writing room. Ask for a shorter answer or fewer quiz questions.",
+  empty_response: "The model sent back an empty answer. Please retry or choose another model.",
+  invalid_response: "Professor couldn't organize a reliable response. Retry or simplify the request; another model may help.",
+  quiz_feedback: "Professor couldn't finish checking that answer. Retry your answer or switch models.",
+  no_evidence: "Professor couldn't find readable passages for this quiz. Check the selected material and its extracted text.",
+  stale_quiz: "This quiz has moved on. Reopen the session to see the current question.",
+};
 async function request(url, options) {
-  const response = await fetch(url, options);
+  let response;
+  try { response = await fetch(url, options); }
+  catch (error) {
+    if (error.name === "AbortError") throw error;
+    throw new Error("Cannot reach Study Buddy. Check that the app is running, then retry.");
+  }
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(typeof error.detail === "string" ? error.detail : "Something went wrong. Please try again.");
+    const code = response.headers?.get("X-Study-Error") || "unknown";
+    const failure = new Error(failureMessages[code] || (typeof error.detail === "string" ? error.detail : "Professor hit an unexpected snag. Reopen the session before retrying."));
+    failure.code = code;
+    failure.status = response.status;
+    failure.diagnostic = error.detail;
+    throw failure;
   }
   return response.status === 204 ? null : response.json();
 }
@@ -316,9 +353,16 @@ function addMessage(role, content, sources = [], usage = null, question = "", qu
   if (sources.length) {
     const details = document.createElement("details"), summary = document.createElement("summary");
     details.className = "source-passages"; summary.textContent = "Source passages (" + sources.length + ")"; details.append(summary);
+    const note = document.createElement("small");
+    note.textContent = "Retrieved references, not an independent fact-check. Added examples or explanations are not quotations from your material.";
+    details.append(note);
+    const passages = new Map();
     sources.forEach(source => {
       const p = document.createElement("p");
-      p.textContent = "[" + source.label + "] " + source.name + " · " + source.location + "\n" + source.text;
+      p.tabIndex = -1;
+      p.textContent = "[" + source.label + "] " + source.name + " · " + source.location
+        + (source.variant === "generated_summary" ? " · AI-generated summary (not original text)" : "") + "\n" + source.text;
+      passages.set(source.label, p);
       if (Number.isInteger(source.page) && /^[a-f0-9]{32}$/.test(source.document_id)) {
         const link = document.createElement("a"); link.textContent = "Open page " + source.page;
         link.href = "/api/materials/" + source.document_id + "/view#page=" + source.page;
@@ -328,6 +372,7 @@ function addMessage(role, content, sources = [], usage = null, question = "", qu
       details.append(p);
     });
     article.append(details);
+    linkSourceCitations(body, details, passages);
   }
   $("#messages").append(article); $("#messages").scrollTop = $("#messages").scrollHeight;
   return article;
@@ -420,7 +465,8 @@ async function sendChatMessage(message, outgoing, task = "auto", quizQuestionId 
   $("#professor-model").disabled = true;
   outgoing?.querySelector(".retry")?.remove();
   outgoing?.classList.remove("failed");
-  const quizRequest = task === "quiz" || /\b(quiz me|test me|next question)\b/i.test(message);
+  const quizRequest = task === "quiz" || quizQuestionId || nextQuestionId || /\b(quiz|test me|next question)\b/i.test(message);
+  $("#messages .quiz-failure")?.remove();
   const pending = addMessage("assistant", quizRequest ? "Professor is preparing your quiz response…" : "Professor is thinking…"); pending.classList.add("pending");
   const thinkingHead = document.createElement("span");
   thinkingHead.className = "professor-thinking";
@@ -428,20 +474,46 @@ async function sendChatMessage(message, outgoing, task = "auto", quizQuestionId 
   pending.querySelector(".message-heading").prepend(thinkingHead);
   $("#chat-error").textContent = "";
   let activityTimer;
+  const requestId = crypto.randomUUID();
+  const started = performance.now();
+  const progressPanel = $("#chat-progress"), cancelButton = $("#cancel-response");
+  progressPanel.hidden = false;
+  $("#chat-stage").textContent = "Preparing your request";
+  $("#chat-elapsed").textContent = "0s";
+  cancelButton.disabled = true;
+  const elapsedTimer = setInterval(() => {
+    $("#chat-elapsed").textContent = Math.floor((performance.now() - started) / 1000) + "s";
+  }, 1000);
   try {
     await ensureStudyMaterial();
     await ensureSession();
     const progressSession = conversationId;
+    let stopping = false;
+    cancelButton.onclick = async () => {
+      stopping = true;
+      cancelButton.disabled = true;
+      try {
+        const result = await request("/api/conversations/" + encodeURIComponent(progressSession)
+          + "/cancel?request_id=" + encodeURIComponent(requestId), {method: "POST"});
+        if (result.cancelled) $("#chat-stage").textContent = "Stopping response";
+        else stopping = false;
+      } catch (error) {
+        $("#chat-error").textContent = error.message;
+        stopping = false;
+      }
+    };
     activityTimer = setInterval(async () => {
       try {
         const progress = await request("/api/conversations/" + encodeURIComponent(progressSession) + "/activity");
         if (pending.isConnected && progress.active) {
+          if (!stopping) $("#chat-stage").textContent = progress.stage;
+          cancelButton.disabled = stopping;
           const content = pending.querySelector(".message-body");
           if (content) content.textContent = progress.stage + "…";
         }
       } catch { /* The chat request reports actionable failures. */ }
     }, 700);
-    const data = await request("/api/chat", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({message, conversation_id: conversationId, document_ids: selectedMaterials, task, quiz_question_id: quizQuestionId, next_question_id: nextQuestionId, model: requestModel})});
+    const data = await request("/api/chat", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({request_id: requestId, message, conversation_id: conversationId, document_ids: selectedMaterials, task, quiz_question_id: quizQuestionId, next_question_id: nextQuestionId, model: requestModel})});
     pending.remove();
     conversationId = data.conversation_id; localStorage.setItem("study-buddy-conversation", conversationId);
     addMessage("assistant", data.message, data.sources || [], data.usage, message, data.quiz_question);
@@ -461,6 +533,11 @@ async function sendChatMessage(message, outgoing, task = "auto", quizQuestionId 
   } catch (error) {
     pending.remove(); outgoing?.classList.add("failed");
     $("#chat-error").textContent = error.message;
+    if (quizRequest && ["quiz_generation", "quiz_feedback", "invalid_response", "output_limit", "context_limit", "no_evidence"].includes(error.code)) {
+      const notice = addMessage("assistant", error.message);
+      notice.classList.add("quiz-failure");
+      $("#chat-error").textContent = "";
+    }
     if (!outgoing) return false;
     const retry = document.createElement("button"); retry.className = "retry"; retry.textContent = "Not delivered · Retry";
     const originalSession = conversationId, originalMaterial = JSON.stringify(selectedMaterials);
@@ -475,7 +552,7 @@ async function sendChatMessage(message, outgoing, task = "auto", quizQuestionId 
     outgoing.append(retry);
     return false;
   }
-  finally { clearInterval(activityTimer); busy = false; $("#professor-model").disabled = false; $("#chat-form button").disabled = false; $("#new-chat").disabled = false; refreshProfessorStatus(); }
+  finally { clearInterval(activityTimer); clearInterval(elapsedTimer); progressPanel.hidden = true; cancelButton.onclick = null; busy = false; $("#professor-model").disabled = false; $("#chat-form button").disabled = false; $("#new-chat").disabled = false; refreshProfessorStatus(); }
 }
 $("#message").addEventListener("keydown", (event) => {
   if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); $("#chat-form").requestSubmit(); }
@@ -665,6 +742,65 @@ if (window.speechSynthesis) speechSynthesis.onvoiceschanged = updateVoices;
 $("#stop-speech").onclick = () => window.speechSynthesis?.cancel();
 initChatTools(); updateVoices(); restoreChat();
 let checkingProfessor = false;
+let catalogChecking = false;
+let downloadingModel = false;
+let modelCatalogSignature = "";
+async function refreshModelCatalog() {
+  if (catalogChecking || switchingModel) return;
+  catalogChecking = true;
+  try {
+    const catalog = await request("/api/models");
+    if (switchingModel) return;
+    const installed = new Set(catalog.models.map(item => item.name));
+    const names = [...new Set([...catalog.recommended, ...installed, professorModel])];
+    const signature = JSON.stringify(names.map(name => [name, installed.has(name)]));
+    if (signature !== modelCatalogSignature) {
+      $("#professor-model").replaceChildren();
+      for (const name of names) {
+        const option = document.createElement("option");
+        option.value = name;
+        option.textContent = modelLabel(name) + (installed.has(name) ? "" : " - not installed");
+        option.disabled = !installed.has(name);
+        $("#professor-model").append(option);
+      }
+      modelCatalogSignature = signature;
+    }
+    $("#professor-model").value = professorModel;
+    downloadingModel = catalog.download.active;
+    $("#model-downloads").replaceChildren();
+    const sizes = {"llama3.2:3b": "~2 GB", "phi4-mini:latest": "~2.5 GB", "gpt-oss:20b": "~13 GB"};
+    for (const name of catalog.recommended.filter(name => !installed.has(name))) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = isCloudModel(name) ? "Set up " + modelLabel(name) : "Download " + modelLabel(name) + " (" + (sizes[name] || "size varies") + ")";
+      button.disabled = downloadingModel;
+      button.onclick = async () => {
+        button.disabled = true;
+        try {
+          await request("/api/models/download", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({model: name})});
+          downloadingModel = true;
+          $("#model-download-status").textContent = "Starting " + modelLabel(name) + "...";
+          await refreshModelCatalog();
+        } catch (error) {
+          $("#model-download-status").textContent = error.message;
+          button.disabled = false;
+        }
+      };
+      $("#model-downloads").append(button);
+    }
+  } catch (error) {
+    $("#model-download-status").textContent = error.message;
+  } finally {catalogChecking = false;}
+}
+setInterval(async () => {
+  if (!downloadingModel) return;
+  try {
+    const state = await request("/api/models/download");
+    const percent = state.total ? " " + Math.floor(100 * state.completed / state.total) + "%" : "";
+    $("#model-download-status").textContent = modelLabel(state.model) + ": " + state.status + percent;
+    if (!state.active) {downloadingModel = false; await refreshModelCatalog(); refreshProfessorStatus();}
+  } catch (error) {$("#model-download-status").textContent = error.message;}
+}, 1500);
 async function refreshProfessorStatus() {
   if (checkingProfessor || switchingModel) return;
   checkingProfessor = true;
@@ -673,12 +809,6 @@ async function refreshProfessorStatus() {
   try {
     const {ollama} = await request("/api/health?model=" + encodeURIComponent(statusModel));
     if (statusModel !== professorModel || switchingModel || version !== modelStatusVersion) return;
-    for (const option of $("#professor-model").options) {
-      option.dataset.baseLabel ||= option.textContent;
-      const missing = ollama.connected && !(ollama.models || []).includes(option.value);
-      option.disabled = !ollama.connected || missing;
-      option.textContent = option.dataset.baseLabel + (missing ? " - unavailable in Ollama" : "");
-    }
     let state, text, detail;
     if (!ollama.connected) {state = "offline"; text = "Professor is offline"; detail = "Ollama is not reachable";}
     else if (!ollama.model_available) {state = "missing"; text = "Professor needs a model"; detail = "Configured model is not installed";}
@@ -694,7 +824,8 @@ async function refreshProfessorStatus() {
   } finally {checkingProfessor = false; if (statusModel !== professorModel || version !== modelStatusVersion) refreshProfessorStatus();}
 }
 refreshProfessorStatus();
-setInterval(() => {if (!document.hidden) refreshProfessorStatus();}, 15000);
+refreshModelCatalog();
+setInterval(() => {if (!document.hidden) {refreshProfessorStatus(); refreshModelCatalog();}}, 15000);
 document.addEventListener("visibilitychange", () => {if (!document.hidden) refreshProfessorStatus();});
 
 let viewingSession = null;

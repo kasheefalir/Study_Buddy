@@ -8,12 +8,17 @@ from app.llm.usage import record_usage
 from time import monotonic
 from app.config import settings
 from app.agents.context_budget import estimate, input_limit
+from app.errors import transport_code
 
 logger = logging.getLogger(__name__)
 
 
 class OllamaError(RuntimeError):
     """Raised when the local Ollama service cannot complete a request."""
+
+    def __init__(self, message, code="model_service"):
+        super().__init__(message)
+        self.code = code
 
 
 class OllamaClient:
@@ -66,7 +71,7 @@ class OllamaClient:
     async def chat(self, messages: list[dict[str, str]], *, json_mode: bool = False, schema=None) -> str:
         started = monotonic()
         if estimate(messages) > input_limit():
-            raise OllamaError("This study request exceeds the configured context budget. Use a smaller material batch or increase CONTEXT_WINDOW.")
+            raise OllamaError("This study request exceeds the configured context budget. Use a smaller material batch or increase CONTEXT_WINDOW.", "context_limit")
         payload = {"model": self.model, "messages": messages, "stream": False, "keep_alive": "30m",
                    "options": {"num_ctx": settings.context_window, "num_predict": settings.response_tokens, "temperature": 0.2}}
         if json_mode:
@@ -87,15 +92,17 @@ class OllamaClient:
                     wall_seconds=monotonic() - started)
                 content = data["message"]["content"]
         except httpx.ConnectError as exc:
-            raise OllamaError("Ollama is not running. Start Ollama and try again.") from exc
+            raise OllamaError("Ollama is not running. Start Ollama and try again.", "ollama_offline") from exc
         except httpx.TimeoutException as exc:
-            raise OllamaError("The local model took too long to respond.") from exc
+            raise OllamaError("The model took too long to respond.", "model_timeout") from exc
+        except httpx.HTTPError as exc:
+            raise OllamaError("Ollama could not complete the request.", transport_code(exc)) from exc
         except (httpx.HTTPStatusError, KeyError, TypeError, ValueError) as exc:
             logger.exception("Ollama returned an invalid response")
             raise OllamaError("Ollama could not complete the request. Check that the configured model is installed.") from exc
 
         if data.get("done_reason") == "length":
-            raise OllamaError("The model reached its output limit before finishing. Try a shorter request.")
+            raise OllamaError("The model reached its output limit before finishing. Try a shorter request.", "output_limit")
         if not isinstance(content, str) or not content.strip():
-            raise OllamaError("Ollama returned an empty response.")
+            raise OllamaError("Ollama returned an empty response.", "empty_response")
         return content.strip()

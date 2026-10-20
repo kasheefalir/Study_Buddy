@@ -43,6 +43,31 @@ def test_full_protocol_and_persisted_review(tmp_path, monkeypatch, prepared):
     assert result["final_state"]["pending_question"] == "Where should preprocessing statistics be fitted?"
 
 
+def test_two_question_batches_preserve_playback_and_final_state(tmp_path, monkeypatch):
+    monkeypatch.setattr(evaluation, "TraceClient", Model)
+    result = asyncio.run(evaluation.sequence(tmp_path, evaluation.fixture(tmp_path), "fake", True, batch_size=2))
+    assert result["mechanics_passed"], result.get("error")
+    turns = {t["name"]: t for t in result["turns"]}
+    assert [turns[name]["model_calls"] for name in ("start", "next_2", "next_3", "next_4", "next_5")] == [4, 0, 4, 0, 2]
+    assert len(result["final_state"]["results"]) == 5
+    assert len(result["calls"]) == 15
+
+
+def test_failed_second_batch_preserves_answered_first_batch(tmp_path, monkeypatch):
+    class FailingModel(Model):
+        async def structured_plan(self, messages, schema):
+            if schema["title"] == "ChoiceQuestion" and self.number == 3:
+                raise RuntimeError("Synthetic generation failure")
+            return await super().structured_plan(messages, schema)
+    monkeypatch.setattr(evaluation, "TraceClient", FailingModel)
+    result = asyncio.run(evaluation.sequence(tmp_path, evaluation.fixture(tmp_path), "fake", True, batch_size=2))
+    assert not result["mechanics_passed"]
+    assert result["completed_answers"] == 2
+    assert result["turns"][-1]["input_state_preserved"]
+    assert result["final_state"]["cursor"] == 1
+    assert result["final_state"]["phase"] == "review"
+
+
 def test_failed_generation_is_reported_without_progress_loss(tmp_path, monkeypatch):
     class Broken(Model):
         async def structured_plan(self, messages, schema):

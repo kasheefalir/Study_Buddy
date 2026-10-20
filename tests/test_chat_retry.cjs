@@ -13,6 +13,7 @@ let retry;
 const outgoing = element();
 outgoing.append = button => { retry = button; };
 const context = {
+  crypto: {randomUUID: () => "test-request"}, performance: {now: () => 0},
   busy: false, switchingModel: false, professorModel: 'llama3.2:3b',
   conversationId: 'session', selectedMaterials: ['book'], conversationMessages: [], deviceVoice: null,
   $: key => { if (!elements.has(key)) elements.set(key, element()); return elements.get(key); },

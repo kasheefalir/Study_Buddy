@@ -37,10 +37,18 @@
       <label for="professor-model">Professor model</label>
       <p><select id="professor-model" aria-describedby="model-ram-guidance"><option value="llama3.2:3b">Llama 3.2 · 3B</option><option value="phi4-mini:latest">Phi-4 Mini · 3.8B</option><option value="gpt-oss:20b">GPT-OSS · 20B</option><option value="gemma4:31b-cloud">Gemma 4 · 31B · Cloud</option></select></p>
       <span id="model-state" role="status">Connecting to local Ollama</span>
+      <div id="model-downloads"></div>
+      <p id="model-download-status" role="status" aria-live="polite"></p>
       <p id="model-ram-guidance" role="status"></p>
       <details class="model-details"><summary>Memory &amp; downloads</summary>
         <p>Approximate downloads: Llama 2 GB, Phi-4 Mini 2.5 GB, GPT-OSS 13 GB.</p>
         <p id="model-memory-note">Download size is not runtime RAM. Memory guidance is an unverified whole-computer estimate; context length and other apps affect usage. Performance on 8 GB is not yet validated.</p>
+      </details>
+      <details class="model-details"><summary>Reliability &amp; limitations</summary>
+        <p>Models can give fluent but incorrect answers. Citations identify retrieved references, not a guarantee that every claim is supported.</p>
+        <p>Examples and added explanations may go beyond the cited wording. Check the original passage for important details; an AI-generated summary is not an original quotation.</p>
+        <p>Our demo checks use fresh sessions and the same questions. Model-specific workflows differ, so results describe this app, not model size alone. A completed quiz checks workflow; it does not prove the answer key is correct.</p>
+        <p id="model-reliability-note"></p>
       </details>
       <p id="model-switch-error" role="alert"></p>
     </div>
@@ -83,6 +91,11 @@
     <div class="follow-ups"><button data-task="simplify" data-prompt="Explain that more simply.">Explain simply</button><button data-task="quiz" data-prompt="Quiz me on the main ideas in this session's material, one question at a time.">Quiz me</button><button id="next-question" data-task="quiz" data-prompt="Next question" hidden>Next question</button><button id="ask-question" type="button" hidden>Ask about this question</button><details class="more-actions"><summary aria-label="More study actions" title="More study actions">⋯</summary><div class="follow-up-menu"><button data-task="quiz" data-prompt="Review my missed answers.">Review missed answers</button><button data-task="summary_conversation" data-prompt="Recap our conversation.">Recap chat</button><button data-task="summary_material" data-prompt="Summarize the selected study material.">Summarize material</button></div></details></div>
     <details id="study-controls"><summary>Activity &amp; token details</summary><div class="study-control-panel"><label class="task-picker" for="task-mode">Activity <select id="task-mode"><option value="auto">Automatic</option><option value="chat">Conversation</option><option value="quiz">Quiz</option><option value="simplify">Explain simply</option><option value="summary_conversation">Recap conversation</option><option value="summary_material">Summarize material</option></select></label><details id="token-details"><summary id="token-summary">Token usage: no recorded replies</summary><div id="token-breakdown"></div></details></div></details>
     <p id="chat-error" class="error" role="alert"></p>
+    <div id="chat-progress" hidden>
+      <span id="chat-stage" role="status">Preparing your request</span>
+      <span id="chat-elapsed" aria-label="Elapsed time">0s</span>
+      <button id="cancel-response" type="button">Cancel</button>
+    </div>
     <form id="chat-form"><label class="sr-only" for="message">Message Professor</label><textarea id="message" rows="2" maxlength="12000" placeholder="Ask a question…" required></textarea><button class="primary" type="submit" aria-label="Send message">↑</button></form>
     <div class="chat-actions"><button id="new-chat">New conversation</button><button data-open="voice">Voice options</button></div>
   </dialog>

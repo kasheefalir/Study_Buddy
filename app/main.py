@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
@@ -33,6 +33,8 @@ async def revalidate_ui_assets(request, call_next):
 
 
 app.include_router(materials_router)
+from app.model_catalog import router as model_catalog_router
+app.include_router(model_catalog_router)
 llm = OllamaClient(settings.ollama_url, settings.ollama_model, settings.request_timeout_seconds)
 store = ConversationStore(settings.conversations_dir, settings.max_history_messages)
 agent = ChatAgent(llm, store)
@@ -58,7 +60,7 @@ app.mount("/static", StaticFiles(directory=static_dir), name="static")
 app.mount("/tileset", StaticFiles(directory=tileset_dir), name="tileset")
 
 
-ProfessorModel = Literal["llama3.2:3b", "phi4-mini:latest", "gpt-oss:20b", "gemma4:31b-cloud"]
+ProfessorModel = Annotated[str, Field(min_length=1, max_length=200, pattern=r"^[A-Za-z0-9][A-Za-z0-9._:/-]*$")]
 model_load_lock = asyncio.Lock()
 
 
@@ -67,6 +69,7 @@ class ModelLoadRequest(BaseModel):
 
 
 class ChatRequest(BaseModel):
+    request_id: str | None = Field(default=None, max_length=64)
     message: str = Field(min_length=1, max_length=12_000)
     conversation_id: str | None = None
     document_id: str = ""
@@ -130,41 +133,50 @@ async def load_model(request: ModelLoadRequest) -> dict:
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest) -> ChatResponse:
     if model_load_lock.locked():
-        raise HTTPException(409, "Professor is loading a model. Please try again when it is ready.")
+        raise HTTPException(409, "Professor is loading a model. Please try again when it is ready.", headers={"X-Study-Error": "model_loading"})
     active_id = request.conversation_id or store.create_id()
     if active_id in activity.active:
-        raise HTTPException(409, "Professor is already responding in this session.")
+        raise HTTPException(409, "Professor is already responding in this session.", headers={"X-Study-Error": "request_busy"})
     try:
         if request.conversation_id and not store._path(active_id).exists():
             raise HTTPException(404, "Study session not found. Start a new session.")
         if request.next_question_id:
             pending = store.quiz(active_id)
             if request.quiz_question_id or pending.get("question_id") != request.next_question_id or pending.get("phase") not in {"review", "complete"}:
-                raise HTTPException(409, "Quiz progress has changed. Reopen the session to refresh it.")
+                raise HTTPException(409, "Quiz progress has changed. Reopen the session to refresh it.", headers={"X-Study-Error": "stale_quiz"})
         if request.quiz_question_id:
             pending = store.quiz(active_id)
             if pending.get("question_id") != request.quiz_question_id or pending.get("phase") != "question" or not pending.get("active"):
-                raise HTTPException(409, "This question is no longer awaiting an answer. Reopen the session to refresh it.")
+                raise HTTPException(409, "This question is no longer awaiting an answer. Reopen the session to refresh it.", headers={"X-Study-Error": "stale_quiz"})
         ids = request.document_ids
         if ids is None and request.conversation_id and not request.document_id:
             ids = store.documents(request.conversation_id)
-        with activity.track(active_id):
+        with activity.track(active_id, request.request_id):
             # A request owns its model for every stage; never mutate the shared client.
             reply_agent = agent
             if request.model is not None:
                 client = OllamaClient(settings.ollama_url, request.model, settings.request_timeout_seconds)
                 status = await client.health()
-                if not status["connected"] or not status["model_available"]:
-                    raise HTTPException(503, "Selected model is unavailable. Install it in Ollama or choose another model.")
+                if not status["connected"]:
+                    raise HTTPException(503, "Cannot reach Ollama. Open Ollama and retry.", headers={"X-Study-Error": "ollama_offline"})
+                if not status["model_available"]:
+                    raise HTTPException(503, "Selected model is unavailable. Install it in Ollama or choose another model.", headers={"X-Study-Error": "model_missing"})
                 reply_agent = selected_agent(client, store)
             conversation_id, reply = await reply_agent.reply(request.message.strip(), active_id, request.document_id, materials.root,
                                                        task=request.task, document_ids=ids,
                                                        quiz_question_id=request.quiz_question_id,
                                                        next_question_id=request.next_question_id)
+    except asyncio.CancelledError as exc:
+        raise HTTPException(status_code=409, detail="Response cancelled. You can retry when ready.", headers={"X-Study-Error": "cancelled"}) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail=str(exc), headers={"X-Study-Error": getattr(exc, "code", "invalid_request")}) from exc
     except OllamaError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise HTTPException(status_code=503, detail=str(exc), headers={"X-Study-Error": exc.code}) from exc
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logging.getLogger(__name__).exception("Unexpected chat failure")
+        raise HTTPException(500, "Professor hit an unexpected snag. Reopen the session to check progress before retrying.", headers={"X-Study-Error": "unexpected"}) from exc
     answer = store.load(conversation_id)[-1]
     from app.agents.quiz import public_question
     return ChatResponse(conversation_id=conversation_id, message=reply, sources=answer.get("sources", []), usage=answer.get("usage", {}),
@@ -174,6 +186,11 @@ async def chat(request: ChatRequest) -> ChatResponse:
 @app.get("/api/conversations/{identifier}/activity")
 async def conversation_activity(identifier: str):
     return {"active": identifier in activity.active, "stage": activity.active.get(identifier, "")}
+
+
+@app.post("/api/conversations/{identifier}/cancel")
+async def cancel_response(identifier: str, request_id: str):
+    return {"cancelled": activity.cancel(identifier, request_id)}
 
 
 @app.get("/api/conversations")

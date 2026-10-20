@@ -2,6 +2,7 @@
 import logging
 
 import httpx
+from app.errors import transport_code
 
 from app.agents.context_budget import estimate, input_limit, reply_reserve
 from app.config import settings
@@ -18,7 +19,7 @@ class GPTClient(OllamaClient):
         reserve = reply_reserve(self.model)
         limit = input_limit(self.model)
         if estimate(messages) > limit:
-            raise OllamaError("This GPT request exceeds its input budget. Select fewer materials or narrow the request.")
+            raise OllamaError("This GPT request exceeds its input budget. Select fewer materials or narrow the request.", "context_limit")
         payload = {"model": self.model, "messages": messages, "stream": False,
                    "think": "low", "keep_alive": "30m",
                    "options": {"num_ctx": settings.context_window, "num_predict": reserve, "temperature": 0.2}}
@@ -37,9 +38,9 @@ class GPTClient(OllamaClient):
             record_usage(data, self.model, diagnostic, wall_seconds=monotonic() - started)
             logger.info("GPT completion: %s", diagnostic)
             if data.get("done") is not True or data.get("done_reason") == "length":
-                raise OllamaError("GPT reached its output limit. Retry; quiz progress has not advanced.")
+                raise OllamaError("GPT reached its output limit. Try a shorter request.", "output_limit")
             if not isinstance(content, str) or not content.strip():
-                raise OllamaError("GPT returned no final response. Please retry.")
+                raise OllamaError("GPT returned no final response. Please retry.", "empty_response")
             return content.strip()
         except (httpx.HTTPError, KeyError, TypeError, ValueError) as exc:
-            raise OllamaError("GPT could not complete this request. Check Ollama and retry.") from exc
+            raise OllamaError("GPT could not complete this request. Check Ollama and retry.", transport_code(exc)) from exc

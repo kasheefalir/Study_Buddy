@@ -1,0 +1,7 @@
+[
+  {"heading":"Probability", "text":"Logistic regression estimates class probabilities. A threshold converts probabilities into predicted classes."},
+  {"heading":"Sigmoid", "text":"The sigmoid maps a real-valued score into a probability between zero and one."},
+  {"heading":"Errors", "text":"A false positive predicts positive for an actually negative case. A false negative predicts negative for an actually positive case."},
+  {"heading":"Metrics", "text":"Precision is true positives divided by all predicted positives. Recall is true positives divided by all actual positives."},
+  {"heading":"Regularization", "text":"Regularization penalizes model coefficients to reduce overfitting. L1 can shrink coefficients to zero; L2 shrinks them toward zero."}
+]

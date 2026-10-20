@@ -230,9 +230,17 @@ If `.venv` is missing, follow the first-time setup for your operating system.
    PDF or webpage import may also download a smaller search model,
    `nomic-embed-text`. Then click Professor and ask a question or start a quiz.
 
-You only need the default model to begin. Other models in the selector must be
-installed in Ollama before you can switch to them. GPT-OSS 20B needs substantially
-more memory and is not intended for an 8 GB computer.
+You only need the default model to begin. The Professor model selector discovers
+chat-capable models registered in Ollama and refreshes automatically. Embedding-only
+models and unavailable retired entries are excluded. Missing recommended models
+have a **Download** button with an approximate size; progress appears in the menu,
+and you can retry a failed download. The menu downloads additional models only
+when you click.
+Cloud recommendations have a **Set up** button instead; they still require
+internet and Ollama account access, and send chat and relevant excerpts to the cloud.
+Other discovered models can be selected, but have not all been tested with Study
+Buddy's general workflow. GPT-OSS 20B needs substantially more memory and is not
+intended for an 8 GB computer.
 
 ### Reopen or Stop Study Buddy
 

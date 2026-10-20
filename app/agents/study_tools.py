@@ -120,6 +120,7 @@ class StudyResponseError(ValueError):
 
     def __init__(self, stage):
         self.stage = stage
+        self.code = "quiz_feedback" if stage == "choice feedback" else "invalid_response"
         super().__init__(f"Professor returned an invalid {stage} response. Please retry.")
 
 

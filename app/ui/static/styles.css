@@ -1,6 +1,12 @@
 :root { font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; color: #273b37; background: #e8eeea; font-synthesis: none; letter-spacing: 0; }
 * { box-sizing: border-box; }
 body { margin: 0; }
+#chat-progress:not([hidden]) { display: flex; align-items: center; gap: 10px; margin: 8px 0; font-size: 12px; }
+#chat-stage { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+#chat-elapsed { font-variant-numeric: tabular-nums; white-space: nowrap; }
+#cancel-response { flex-shrink: 0; padding: 8px 12px; }
+.source-citation { display: inline; padding: 0 2px; border: 0; background: transparent; font: inherit; text-decoration: underline; }
+.source-passages > small { display: block; margin-top: 10px; line-height: 1.5; }
 button, input, textarea { font: inherit; }
 button, a, input { -webkit-tap-highlight-color: transparent; }
 button { cursor: pointer; border: 1px solid #b7c7be; background: #f8faf7; color: #29463a; padding: 12px 18px; border-radius: 4px; font-size: 13px; }
@@ -17,6 +23,9 @@ header { display: flex; justify-content: space-between; align-items: center; gap
 .menu-items button:hover { background: #e8efdf; }
 .model-info { margin-top: 24px; }
 .model-info label { font-size: 13px; }
+#model-downloads { display: grid; gap: 8px; margin-top: 10px; }
+#model-downloads:empty { display: none; }
+#model-downloads button { width: 100%; white-space: normal; overflow-wrap: anywhere; font-size: 12px; }
 .model-info p { font-size: 12px; line-height: 1.5; margin: 9px 0; overflow-wrap: anywhere; }
 .model-details { margin-top: 12px; font-size: 12px; color: #52675b; }
 .model-details summary { cursor: pointer; padding: 8px 0; }

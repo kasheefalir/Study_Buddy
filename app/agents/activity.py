@@ -1,8 +1,10 @@
 """Ephemeral request-local progress, separate from conversation memory."""
 from contextlib import contextmanager
 from contextvars import ContextVar
+import asyncio
 
 active = {}
+tasks = {}
 current = ContextVar("study_activity", default=None)
 quiz_preparation = ContextVar("quiz_preparation", default="")
 
@@ -17,14 +19,25 @@ def preparing_question(number, total):
 
 
 @contextmanager
-def track(identifier):
+def track(identifier, request_id=None):
     token = current.set(identifier)
     active[identifier] = "Understanding your request"
+    if request_id:
+        tasks[identifier] = (request_id, asyncio.current_task())
     try:
         yield
     finally:
         active.pop(identifier, None)
+        tasks.pop(identifier, None)
         current.reset(token)
+
+
+def cancel(identifier, request_id):
+    running = tasks.get(identifier)
+    if not running or running[0] != request_id or running[1].done():
+        return False
+    running[1].cancel()
+    return True
 
 
 def report(stage):

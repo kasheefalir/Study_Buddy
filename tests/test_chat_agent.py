@@ -2,6 +2,7 @@ import asyncio
 
 from app.agents.chat_agent import ChatAgent
 from app.storage.conversation_store import ConversationStore
+import pytest
 
 
 class FakeLLM:
@@ -11,6 +12,24 @@ class FakeLLM:
     async def chat(self, messages):
         self.requests.append(messages)
         return "A useful answer"
+
+
+@pytest.mark.parametrize("model", ["phi4-mini:latest", "gpt-oss:20b", "gemma4:31b-cloud"])
+@pytest.mark.parametrize("message", ["Next question", "next!", "continue", "ready"])
+def test_completed_next_cannot_replace_results(tmp_path, model, message):
+    from app.agents.gpt.agent import GPTAgent
+    llm = FakeLLM()
+    llm.model = model
+    store = ConversationStore(tmp_path / "sessions")
+    identifier = store.create_id()
+    quiz = {"version": 2, "phase": "complete", "active": False, "total": 5,
+            "results": [{"verdict": "incorrect" if i == 1 else "correct"} for i in range(5)]}
+    store.save(identifier, [], quiz=quiz)
+    agent = (GPTAgent if model == "gpt-oss:20b" else ChatAgent)(llm, store)
+    _, response = asyncio.run(agent.reply(message, identifier, materials_root=tmp_path, document_ids=[]))
+    assert "4 of 5 correct" in response
+    assert store.quiz(identifier) == quiz
+    assert not llm.requests
 
 
 def test_agent_preserves_follow_up_context(tmp_path):

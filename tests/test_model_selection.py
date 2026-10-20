@@ -27,7 +27,7 @@ def test_preload_success_and_failure_release_lock(monkeypatch):
     assert not main.model_load_lock.locked()
     assert client.post("/api/models/load", json={"model": "llama3.2:3b"}).status_code == 503
     assert not main.model_load_lock.locked()
-    assert client.post("/api/models/load", json={"model": "unknown"}).status_code == 422
+    assert client.post("/api/models/load", json={"model": "invalid model"}).status_code == 422
     assert main.llm.model == original
     assert seen == ["phi4-mini:latest", "llama3.2:3b"]
 
@@ -119,8 +119,8 @@ def test_invalid_or_unavailable_model_does_not_start_chat(tmp_path, monkeypatch)
     monkeypatch.setattr(main.OllamaClient, "health", unavailable)
     client = TestClient(main.app)
     cid = client.post("/api/conversations", json={}).json()["conversation_id"]
-    assert client.post("/api/chat", json={"message": "Hello", "model": "unknown"}).status_code == 422
-    assert client.get("/api/health", params={"model": "unknown"}).status_code == 422
+    assert client.post("/api/chat", json={"message": "Hello", "model": "unknown"}).status_code == 503
+    assert client.get("/api/health", params={"model": "invalid model"}).status_code == 422
     assert client.post("/api/chat", json={"message": "Hello", "conversation_id": cid,
                                          "model": "phi4-mini:latest"}).status_code == 503
     assert store.load(cid) == []
@@ -142,9 +142,17 @@ def test_omitted_model_uses_existing_agent(tmp_path, monkeypatch):
     assert result.json()["message"] == "default"
 
 
-def test_removed_model_is_not_selectable():
+def test_discovered_model_is_selectable(monkeypatch):
+    async def health(self):
+        return {"connected": True, "model_available": True}
+
+    async def preload(self):
+        assert self.model == "new-model:4b"
+
+    monkeypatch.setattr(main.OllamaClient, "health", health)
+    monkeypatch.setattr(main.OllamaClient, "preload", preload)
     client = TestClient(main.app)
-    assert client.post("/api/models/load", json={"model": "deepseek-r1:8b"}).status_code == 422
+    assert client.post("/api/models/load", json={"model": "new-model:4b"}).status_code == 200
 
 
 def test_ui_assets_revalidate_after_updates():

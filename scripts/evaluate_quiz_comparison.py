@@ -60,8 +60,8 @@ class FormatRepairClient(TraceClient):
         return raw
 
 
-def fixture(root):
-    facts = json.loads(Path("tests/fixtures/quiz_comparison_material.json").read_text())
+def fixture(root, path=Path("tests/fixtures/quiz_comparison_material.json")):
+    facts = json.loads(path.read_text())
     item = {"id": IDENTIFIER, "name": "Synthetic statistics study notes", "status": "Ready", "kind": "file"}
     (root / IDENTIFIER).mkdir(parents=True)
     (root / (IDENTIFIER + ".json")).write_text(json.dumps(item))
@@ -76,10 +76,10 @@ def fixture(root):
             "available_windows": len(available), "plan_version": 2, "turns": 0}
 
 
-async def sequence(root, initial, model, prepared, repair_format=False):
+async def sequence(root, initial, model, prepared, repair_format=False, batch_size=None):
     llm = (FormatRepairClient if repair_format else TraceClient)(model)
     result = {"model": model, "mode": "prepared" if prepared else "incremental",
-              "repair_format": repair_format, "turns": [], "calls": llm.calls}
+              "repair_format": repair_format, "batch_size": batch_size, "turns": [], "calls": llm.calls}
     state = deepcopy(initial)
     store = ConversationStore(root / "conversations")
     cid = store.create_id()
@@ -94,7 +94,7 @@ async def sequence(root, initial, model, prepared, repair_format=False):
         count = len(llm.calls)
         try:
             text, state, sources = await quiz_turn(root, [IDENTIFIER], message, state, llm,
-                recent=history, activity_action=action, prepare_all=prepared)
+                recent=history, activity_action=action, prepare_all=prepared, batch_size=batch_size)
             row.update(text=text, question=public_question(state), sources=sources, state=deepcopy(state))
             history.extend([{"role": "user", "content": message}, {"role": "assistant", "content": text or ""}])
             store.save(cid, history, document_ids=[IDENTIFIER], quiz=state)
