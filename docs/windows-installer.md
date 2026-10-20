@@ -60,5 +60,6 @@ quiz, closing/reopening, occupied port, second launch, upgrade, and uninstall wi
 saved data retained. CI smoke tests are not a substitute for that walkthrough.
 Code signing and a reproducibly locked dependency set remain release work.
 
-The automatic cloud setup change is newer than the first linked build and needs
-a new Windows build before distribution.
+The [updated cloud-default build](https://github.com/kasheefalir/Study_Buddy/actions/runs/39477912611)
+also passed build, packaged smoke, and install/uninstall checks.
+Use its installer for automatic cloud setup.

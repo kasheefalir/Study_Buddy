@@ -8,6 +8,11 @@ Separate Apple Silicon and Intel builds target macOS 15 or newer. The GitHub
 workflow is `.github/workflows/macos-bundle.yml`. Build artifacts are downloadable
 ZIPs containing the DMG, not source code.
 
+The [October 20 build](https://github.com/kasheefalir/Study_Buddy/actions/runs/39477912723)
+produced Apple Silicon (~49 MB) and Intel (~52 MB) downloads. Both passed launcher
+tests, frozen import/resource checks, and disk-image verification. Interactive
+downloaded-app acceptance testing is still pending.
+
 ## Existing Installation
 
 The bundle uses the Ollama service already installed on your Mac, including its

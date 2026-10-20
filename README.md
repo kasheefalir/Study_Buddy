@@ -80,9 +80,9 @@ Ollama is a separate desktop app.
 
 | Computer | App download |
 | --- | --- |
-| Windows x64 | [Download Windows installer preview](https://github.com/kasheefalir/Study_Buddy/actions/runs/39475990583/artifacts/12288803742) |
-| Mac with Apple Silicon (M-series chip) | [Mac app builds: choose Apple-Silicon artifact](https://github.com/kasheefalir/Study_Buddy/actions/workflows/macos-bundle.yml) |
-| Mac with Intel processor | [Mac app builds: choose Intel artifact](https://github.com/kasheefalir/Study_Buddy/actions/workflows/macos-bundle.yml) |
+| Windows x64 | [Download Windows installer preview](https://github.com/kasheefalir/Study_Buddy/actions/runs/39477912611/artifacts/12290920212) |
+| Mac with Apple Silicon (M-series chip) | [Download Mac Apple Silicon preview](https://github.com/kasheefalir/Study_Buddy/actions/runs/39477912723/artifacts/12290235977) |
+| Mac with Intel processor | [Download Mac Intel preview](https://github.com/kasheefalir/Study_Buddy/actions/runs/39477912723/artifacts/12290076175) |
 
 These preview downloads are GitHub Actions artifacts: sign in to GitHub if asked.
 For a build page, open the latest successful run and find **Artifacts** at the
@@ -174,7 +174,7 @@ cd "$HOME/Desktop" && git clone https://github.com/kasheefalir/Study_Buddy.git &
 
 A bundled Windows installer is available as an unsigned preview. It removes the
 separate Python setup and terminal steps. Download **StudyBuddy-Windows-Installer**
-from the [successful Windows build](https://github.com/kasheefalir/Study_Buddy/actions/runs/39475990583),
+from the [successful Windows build](https://github.com/kasheefalir/Study_Buddy/actions/runs/39477912611),
 extract the artifact ZIP, and run `StudyBuddy-Windows-Setup.exe`.
 GitHub may require sign-in to download build artifacts. See
 [Windows installer status and instructions](docs/windows-installer.md) for limitations.
@@ -203,15 +203,16 @@ winget install --id Python.Python.3.13 --exact --source winget
    and move the extracted **Study_Buddy-main** folder to your **Desktop**.
    Do not run the app from inside the ZIP or replace an existing project folder.
 
-4. **Set up and launch.** Close your terminal application completely, then reopen
-   **PowerShell** (not Command Prompt). Paste this whole block and press Enter.
-   It finds your Desktop even if Windows stores it in OneDrive, and stops if a
-   setup command fails.
+4. **Set up and launch.** In File Explorer, open the extracted folder. If you see
+   another `Study_Buddy-main` folder, open that too, until `requirements.txt` is
+   visible. The address must not contain `.zip`. Click the address bar, type
+   `powershell`, and press Enter. Paste this whole block, starting with `& {`,
+   and press Enter. Do not copy a `PS C:\...>` prompt or any error output.
 
 ```powershell
 & {
     $ErrorActionPreference = "Stop"
-    Set-Location (Join-Path ([Environment]::GetFolderPath("Desktop")) "Study_Buddy-main")
+    if (!(Test-Path .\requirements.txt)) { throw "Open PowerShell in the extracted folder containing requirements.txt." }
     py -3.13 -m venv .venv
     if ($LASTEXITCODE -ne 0) { throw "Python setup failed. Check Python installation." }
     .\.venv\Scripts\python.exe -m pip install -r requirements.txt
@@ -240,7 +241,7 @@ Set-Location ([Environment]::GetFolderPath("Desktop"))
 git clone https://github.com/kasheefalir/Study_Buddy.git
 ```
 
-Then use step 4, changing `"Study_Buddy-main"` to `"Study_Buddy"`.
+Then open the cloned `Study_Buddy` folder and follow step 4.
 Do not overwrite an existing project folder.
 
 ### Already Have Study Buddy Installed?
